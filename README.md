@@ -39,3 +39,50 @@ Examples
     midi file has 1 tracks!
     first track has 16430 events!
     first track has 446 'note on' events on channel 1!
+
+
+Status and roadmap
+------------------
+
+- [x] choose MIDI parser library
+- [x] ensure we can get data from MIDI files using the chosen MIDI parser (midly)
+- [ ] function to turn a MIDI file into an in-memory reference score (ms+pitch)
+  - [ ] use only the first track which contains meaningful MIDI data
+  - [ ] use only the first channel which contains meaningful MIDI data
+  - [ ] use only "note on" events
+  - [ ] ignore velocity
+  - [ ] convert time offsets to milliseconds (disregarding tempo for now)
+  - [ ] tool to output reference score on stdout
+- [ ] first naïve stateless score follower algorithm `selim-0.1.0`
+  - [ ] inputs:
+    - [ ] complete reference score (ms+pitch)
+    - [ ] reference time index at last previous input note (ms)
+    - [ ] reference time warp factor at last previous input note
+    - [ ] previous input notes (ms+pitch)
+    - [ ] new input notes (ms+pitch)
+  - [ ] outputs:
+    - [ ] reference time index at last new input note (ms)
+    - [ ] reference time warp factor at last new input note
+    - [ ] list of ignored new input notes (ms+pitch)
+  - [ ] support only monophony (order of events matters)
+  - [ ] ignore unexpected (wrong/extra) notes
+  - [ ] keep waiting for next correct note
+- [ ] unit tests for `selim-0.1.0`
+- [ ] choose MIDI input library
+- [ ] real-time tool to convert MIDI input into ms+pitch events on stdout
+- [ ] real-time tool to test out `selim-0.1.x`
+  - [ ] inputs:
+    - [ ] reference MIDI file
+    - [ ] real-time ms+pitch events on stdin
+  - [ ] outputs on stdout:
+    - [ ] reference time index at last new input note (ms)
+    - [ ] reference time warp factor at last new input note
+    - [ ] ignored input notes
+- [ ] wrong/missed/extra note tolerant score follower algorithm `selim-0.1.1`
+  - [ ] match new input notes with future reference notes within a time window
+  - [ ] jump directly to first matching note
+- [ ] time warp factor adjustment limit in `selim-0.1.2`
+- [ ] refine MIDI file interpretation (ms+pitch+vel+dur)
+  - [ ] take tempo changes into account when converting to milliseconds
+  - [ ] include velocity
+  - [ ] convert "note off" events to durations
