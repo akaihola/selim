@@ -63,21 +63,22 @@ fn get_stretch_factor(
     }
 }
 
-fn get_next_time(
+/// Returns the score time in milliseconds corresponding to the latest live note
+/// (whether matched or unmatched)
+/// 
+/// Corrects the elapsed time since the last match using the calculated stretch factor,
+/// and adds that to the score time of the last match.
+fn get_score_time(
     score: &Vec<ScoreNote>,
     live: &Vec<ScoreNote>,
-    prev_match_score_index: Option<usize>,
-    prev_match_live_index: Option<usize>,
+    prev_score_index: Option<usize>,
+    prev_live_index: Option<usize>,
     stretch_factor: f32,
 ) -> u32 {
-    let prev_match_score_time = score[prev_match_score_index.unwrap_or(0)].time;
-    let elapsed_live = time_difference(
-        live,
-        prev_match_live_index.or(Some(0)),
-        Some(live.len() - 1),
-    )
-    .unwrap() as f32;
-    prev_match_score_time + (elapsed_live / stretch_factor) as u32
+    let prev_score_time = score[prev_score_index.unwrap_or(0)].time;
+    let elapsed_live =
+        time_difference(live, prev_live_index.or(Some(0)), Some(live.len() - 1)).unwrap();
+    prev_score_time + (elapsed_live as f32 / stretch_factor) as u32
 }
 
 /// Matches incoming notes with next notes in the score.
@@ -141,7 +142,7 @@ pub fn follow_score(
     let elapsed_score = time_difference(&score, prev_match_score_index, next_match_score_index);
     let elapsed_live = time_difference(&live, prev_match_live_index, next_match_live_index);
     let stretch_factor = get_stretch_factor(elapsed_score, elapsed_live, prev_stretch_factor);
-    let score_time = get_next_time(
+    let score_time = get_score_time(
         &score,
         &live,
         prev_match_score_index,
