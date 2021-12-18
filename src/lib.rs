@@ -5,6 +5,16 @@ pub struct ScoreNote {
     pitch: u8,
 }
 
+fn find_next_match_after(score: &Vec<ScoreNote>, score_index: usize, pitch: u8) -> Option<usize> {
+    let matching_index = score[score_index..]
+        .iter()
+        .position(|score_note| score_note.pitch == pitch);
+    match matching_index {
+        Some(i) => Some(score_index + i),
+        None => None,
+    }
+}
+
 /// Matches incoming notes with next notes in the score.
 /// This is a super naïve algorithm which
 /// * supports only monophony (order of events matters),
@@ -69,15 +79,12 @@ pub fn follow_score(
     let mut ignored: Vec<usize> = vec![];
     for live_index in new_live_index..live.len() {
         let live_note = live[live_index];
-        let matching_index = score[score_index..]
-            .iter()
-            .position(|score_note| score_note.pitch == live_note.pitch);
+        let matching_index = find_next_match_after(&score, score_index, live_note.pitch);
         match matching_index {
             Some(i) => {
                 next_match_live_index = Some(live_index);
-                score_index += i;
-                next_match_score_index = Some(score_index);
-                score_index += 1;
+                next_match_score_index = Some(i);
+                score_index = i + 1;
             }
             None => ignored.push(live_index),
         };
