@@ -46,6 +46,23 @@ Status and roadmap
 
 - [x] choose MIDI parser library
 - [x] ensure we can get data from MIDI files using the chosen MIDI parser (midly)
+- [x] data type for an in-memory reference score (milliseconds and pitches)
+- [ ] first naïve stateless score follower algorithm `selim-0.1.0`
+  - [ ] inputs:
+    - [ ] complete reference score (ms+pitch)
+    - [ ] complete live input so far (ms+pitch)
+    - [ ] position of last matching previous input note in the score
+    - [ ] position of last matching previous input note in the live input
+    - [ ] position of first new note in the live input
+    - [ ] time warp factor at matching note
+  - [ ] outputs:
+    - [ ] reference time index at last new input note (ms)
+    - [ ] time warp factor at last new matching note
+    - [ ] list of ignored new input notes (ms+pitch)
+  - [ ] support only monophony (order of events matters)
+  - [ ] ignore unexpected (wrong/extra) notes
+  - [ ] keep waiting for next correct note
+- [ ] unit tests for `selim-0.1.0`
 - [ ] function to turn a MIDI file into an in-memory reference score (ms+pitch)
   - [ ] use only the first track which contains meaningful MIDI data
   - [ ] use only the first channel which contains meaningful MIDI data
@@ -53,21 +70,6 @@ Status and roadmap
   - [ ] ignore velocity
   - [ ] convert time offsets to milliseconds (disregarding tempo for now)
   - [ ] tool to output reference score on stdout
-- [ ] first naïve stateless score follower algorithm `selim-0.1.0`
-  - [ ] inputs:
-    - [ ] complete reference score (ms+pitch)
-    - [ ] reference time index at last previous input note (ms)
-    - [ ] reference time warp factor at last previous input note
-    - [ ] previous input notes (ms+pitch)
-    - [ ] new input notes (ms+pitch)
-  - [ ] outputs:
-    - [ ] reference time index at last new input note (ms)
-    - [ ] reference time warp factor at last new input note
-    - [ ] list of ignored new input notes (ms+pitch)
-  - [ ] support only monophony (order of events matters)
-  - [ ] ignore unexpected (wrong/extra) notes
-  - [ ] keep waiting for next correct note
-- [ ] unit tests for `selim-0.1.0`
 - [ ] choose MIDI input library
 - [ ] real-time tool to convert MIDI input into ms+pitch events on stdout
 - [ ] real-time tool to test out `selim-0.1.x`
