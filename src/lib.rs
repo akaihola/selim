@@ -15,6 +15,17 @@ fn find_next_match_after(score: &Vec<ScoreNote>, score_index: usize, pitch: u8) 
     }
 }
 
+fn time_difference(
+    score: &Vec<ScoreNote>,
+    index1: Option<usize>,
+    index2: Option<usize>,
+) -> Option<u32> {
+    match (index1, index2) {
+        (Some(i1), Some(i2)) => Some(score[i2].time - score[i1].time),
+        _ => None,
+    }
+}
+
 /// Matches incoming notes with next notes in the score.
 /// This is a super naïve algorithm which
 /// * supports only monophony (order of events matters),
@@ -77,8 +88,7 @@ pub fn follow_score(
     };
     let (mut next_match_score_index, mut next_match_live_index) = (None, None);
     let mut ignored: Vec<usize> = vec![];
-    for live_index in new_live_index..live.len() {
-        let live_note = live[live_index];
+    for (live_index, live_note) in live.iter().enumerate().skip(new_live_index) {
         let matching_index = find_next_match_after(&score, score_index, live_note.pitch);
         match matching_index {
             Some(i) => {
@@ -89,19 +99,14 @@ pub fn follow_score(
             None => ignored.push(live_index),
         };
     }
-    let (next_stretch_factor, next_time, prev_match_score_index_, prev_match_live_index_);
-    match (
-        prev_match_score_index,
-        prev_match_live_index,
-        next_match_score_index,
-        next_match_live_index,
-    ) {
-        (Some(score_old), Some(live_old), Some(score_new), Some(live_new)) => {
-            let elapsed_ref = score[score_new].time - score[score_old].time;
-            let elapsed_live = live[live_new].time - live[live_old].time;
-            next_stretch_factor = (elapsed_live as f32) / (elapsed_ref as f32);
-            prev_match_score_index_ = score_old;
-            prev_match_live_index_ = live_old;
+    let (next_stretch_factor, prev_match_score_index_, prev_match_live_index_);
+    let elapsed_ref = time_difference(&score, prev_match_score_index, next_match_score_index);
+    let elapsed_live = time_difference(&live, prev_match_live_index, next_match_live_index);
+    match (elapsed_ref, elapsed_live) {
+        (Some(e_score), Some(e_live)) => {
+            next_stretch_factor = (e_live as f32) / (e_score as f32);
+            prev_match_score_index_ = prev_match_score_index.unwrap();
+            prev_match_live_index_ = prev_match_live_index.unwrap();
         }
         _ => {
             next_stretch_factor = last_stretch_factor;
@@ -112,7 +117,7 @@ pub fn follow_score(
     let prev_match_score_time = score[prev_match_score_index_].time;
     let live_end_time = live[live.len() - 1].time;
     let prev_match_live_time = live[prev_match_live_index_].time;
-    next_time = prev_match_score_time
+    let next_time = prev_match_score_time
         + ((live_end_time - prev_match_live_time) as f32 / next_stretch_factor) as u32;
     (
         next_time,
