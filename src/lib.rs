@@ -6,10 +6,10 @@ pub struct ScoreNote {
 }
 
 fn find_next_match_after(score: &Vec<ScoreNote>, score_index: usize, pitch: u8) -> Option<usize> {
-    let matching_index = score[score_index..]
+    match score[score_index..]
         .iter()
-        .position(|score_note| score_note.pitch == pitch);
-    match matching_index {
+        .position(|score_note| score_note.pitch == pitch)
+    {
         Some(i) => Some(score_index + i),
         None => None,
     }
