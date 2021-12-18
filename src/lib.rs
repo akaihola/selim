@@ -26,6 +26,32 @@ fn time_difference(
     }
 }
 
+fn find_newest_match(
+    score: &Vec<ScoreNote>,
+    live: &Vec<ScoreNote>,
+    prev_match_score_index: Option<usize>,
+    new_live_index: usize,
+) -> (Option<usize>, Option<usize>, Vec<usize>) {
+    let mut score_index = match prev_match_score_index {
+        None => 0,        // start from beginning of score if nothing matched yet
+        Some(i) => i + 1, // continue in the score just after last previous match
+    };
+    let (mut next_match_score_index, mut next_match_live_index) = (None, None);
+    let mut ignored: Vec<usize> = vec![];
+    for (live_index, live_note) in live.iter().enumerate().skip(new_live_index) {
+        let matching_index = find_next_match_after(&score, score_index, live_note.pitch);
+        match matching_index {
+            Some(i) => {
+                next_match_live_index = Some(live_index);
+                next_match_score_index = Some(i);
+                score_index = i + 1;
+            }
+            None => ignored.push(live_index),
+        };
+    }
+    (next_match_score_index, next_match_live_index, ignored)
+}
+
 fn get_stretch_factor(
     elapsed_score: Option<u32>,
     elapsed_live: Option<u32>,
@@ -110,37 +136,21 @@ pub fn follow_score(
     new_live_index: usize,
     prev_stretch_factor: f32,
 ) -> (u32, f32, Option<usize>, Option<usize>, Vec<usize>) {
-    let mut score_index = match prev_match_score_index {
-        None => 0,        // start from beginning of score if nothing matched yet
-        Some(i) => i + 1, // continue in the score just after last previous match
-    };
-    let (mut next_match_score_index, mut next_match_live_index) = (None, None);
-    let mut ignored: Vec<usize> = vec![];
-    for (live_index, live_note) in live.iter().enumerate().skip(new_live_index) {
-        let matching_index = find_next_match_after(&score, score_index, live_note.pitch);
-        match matching_index {
-            Some(i) => {
-                next_match_live_index = Some(live_index);
-                next_match_score_index = Some(i);
-                score_index = i + 1;
-            }
-            None => ignored.push(live_index),
-        };
-    }
-
+    let (next_match_score_index, next_match_live_index, ignored) =
+        find_newest_match(&score, &live, prev_match_score_index, new_live_index);
     let elapsed_score = time_difference(&score, prev_match_score_index, next_match_score_index);
     let elapsed_live = time_difference(&live, prev_match_live_index, next_match_live_index);
-    let next_stretch_factor = get_stretch_factor(elapsed_score, elapsed_live, prev_stretch_factor);
-    let next_time = get_next_time(
+    let stretch_factor = get_stretch_factor(elapsed_score, elapsed_live, prev_stretch_factor);
+    let score_time = get_next_time(
         &score,
         &live,
         prev_match_score_index,
         prev_match_live_index,
-        next_stretch_factor,
+        stretch_factor,
     );
     (
-        next_time,
-        next_stretch_factor,
+        score_time,
+        stretch_factor,
         next_match_score_index,
         next_match_live_index,
         ignored,
