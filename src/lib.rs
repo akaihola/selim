@@ -99,24 +99,16 @@ pub fn follow_score(
             None => ignored.push(live_index),
         };
     }
-    let (next_stretch_factor, prev_match_score_index_, prev_match_live_index_);
-    let elapsed_ref = time_difference(&score, prev_match_score_index, next_match_score_index);
+
+    let elapsed_score = time_difference(&score, prev_match_score_index, next_match_score_index);
     let elapsed_live = time_difference(&live, prev_match_live_index, next_match_live_index);
-    match (elapsed_ref, elapsed_live) {
-        (Some(e_score), Some(e_live)) => {
-            next_stretch_factor = (e_live as f32) / (e_score as f32);
-            prev_match_score_index_ = prev_match_score_index.unwrap();
-            prev_match_live_index_ = prev_match_live_index.unwrap();
-        }
-        _ => {
-            next_stretch_factor = last_stretch_factor;
-            prev_match_score_index_ = prev_match_score_index.unwrap_or(0);
-            prev_match_live_index_ = prev_match_live_index.unwrap_or(0);
-        }
+    let next_stretch_factor = match (elapsed_score, elapsed_live) {
+        (Some(e_score), Some(e_live)) => (e_live as f32) / (e_score as f32),
+        _ => last_stretch_factor,
     };
-    let prev_match_score_time = score[prev_match_score_index_].time;
+    let prev_match_score_time = score[prev_match_score_index.unwrap_or(0)].time;
     let live_end_time = live[live.len() - 1].time;
-    let prev_match_live_time = live[prev_match_live_index_].time;
+    let prev_match_live_time = live[prev_match_live_index.unwrap_or(0)].time;
     let next_time = prev_match_score_time
         + ((live_end_time - prev_match_live_time) as f32 / next_stretch_factor) as u32;
     (
