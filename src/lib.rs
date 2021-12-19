@@ -160,6 +160,7 @@ pub fn follow_score(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
 
     macro_rules! note {
         ( $t:expr, $p:expr ) => {
@@ -179,7 +180,7 @@ mod tests {
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(score.to_vec(), live.to_vec(), None, None, 0, 1.0);
         assert_eq!(time, 1000);
-        assert_eq!(stretch_factor, 1.0);
+        assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(last_match_score, Some(0));
         assert_eq!(last_match_live, Some(0));
         assert!(ignored.is_empty());
@@ -191,7 +192,7 @@ mod tests {
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(TEST_SCORE.to_vec(), live.to_vec(), None, None, 0, 1.0);
         assert_eq!(time, 1000);
-        assert_eq!(stretch_factor, 1.0);
+        assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(last_match_score, Some(0));
         assert_eq!(last_match_live, Some(0));
         assert!(ignored.is_empty());
@@ -203,7 +204,7 @@ mod tests {
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(TEST_SCORE.to_vec(), live.to_vec(), Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1100);
-        assert_eq!(stretch_factor, 0.5);
+        assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(last_match_score, Some(1));
         assert_eq!(last_match_live, Some(1));
         assert!(ignored.is_empty());
@@ -215,7 +216,7 @@ mod tests {
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(TEST_SCORE.to_vec(), live.to_vec(), Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1100);
-        assert_eq!(stretch_factor, 0.5);
+        assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(last_match_score, Some(1));
         assert_eq!(last_match_live, Some(2));
         assert_eq!(ignored, vec![1]);
@@ -227,7 +228,7 @@ mod tests {
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(TEST_SCORE.to_vec(), live.to_vec(), Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1200);
-        assert_eq!(stretch_factor, 0.25);
+        assert_approx_eq!(stretch_factor, 0.25);
         assert_eq!(last_match_score, Some(2));
         assert_eq!(last_match_live, Some(1));
         assert!(ignored.is_empty());
