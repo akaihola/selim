@@ -162,21 +162,20 @@ mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
 
-    macro_rules! note {
-        ( $t:expr, $p:expr ) => {
-            ScoreNote {
-                time: $t,
-                pitch: $p,
-            }
-        };
+    macro_rules! notes {
+        (
+            $( ($t: expr, $p: expr) ),+
+        ) => {
+            [ $( ScoreNote {time: $t, pitch: $p} ),+ ]
+        }
     }
 
-    const TEST_SCORE: [ScoreNote; 3] = [note!(1000, 60), note!(1100, 62), note!(1200, 64)];
+    const TEST_SCORE: [ScoreNote; 3] = notes![(1000, 60), (1100, 62), (1200, 64)];
 
     #[test]
     fn match_the_only_note() {
-        let score = [note!(1000, 60)];
-        let live = [note!(5, 60)];
+        let score = notes![(1000, 60)];
+        let live = notes![(5, 60)];
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(&score, &live, None, None, 0, 1.0);
         assert_eq!(time, 1000);
@@ -188,7 +187,7 @@ mod tests {
 
     #[test]
     fn match_first() {
-        let live = [note!(5, 60)];
+        let live = notes![(5, 60)];
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(&TEST_SCORE, &live, None, None, 0, 1.0);
         assert_eq!(time, 1000);
@@ -200,7 +199,7 @@ mod tests {
 
     #[test]
     fn match_second() {
-        let live = [note!(5, 60), note!(55, 62)];
+        let live = notes![(5, 60), (55, 62)];
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(&TEST_SCORE, &live, Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1100);
@@ -212,7 +211,7 @@ mod tests {
 
     #[test]
     fn skip_extra_note() {
-        let live = [note!(5, 60), note!(25, 61), note!(55, 62)];
+        let live = notes![(5, 60), (25, 61), (55, 62)];
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(&TEST_SCORE, &live, Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1100);
@@ -224,7 +223,7 @@ mod tests {
 
     #[test]
     fn skip_missing_note() {
-        let live = [note!(5, 60), note!(55, 64)];
+        let live = notes![(5, 60), (55, 64)];
         let (time, stretch_factor, last_match_score, last_match_live, ignored) =
             follow_score(&TEST_SCORE, &live, Some(0), Some(0), 1, 1.0);
         assert_eq!(time, 1200);
