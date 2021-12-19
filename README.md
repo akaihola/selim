@@ -48,20 +48,20 @@ Status and roadmap
 - [x] ensure we can get data from MIDI files using the chosen MIDI parser (midly)
 - [x] data type for an in-memory reference score (milliseconds and pitches)
 - [ ] first naïve stateless score follower algorithm `selim-0.1.0`
-  - [ ] inputs:
-    - [ ] complete reference score (ms+pitch)
-    - [ ] complete live input so far (ms+pitch)
-    - [ ] position of last matching previous input note in the score
-    - [ ] position of last matching previous input note in the live input
-    - [ ] position of first new note in the live input
-    - [ ] time warp factor at matching note
+  - [x] inputs:
+    - [x] complete reference score (ms+pitch)
+    - [x] complete live input so far (ms+pitch)
+    - [x] position of last matching previous input note in the score
+    - [x] position of last matching previous input note in the live input
+    - [x] position of first new note in the live input
+    - [x] time stretch factor at last matching note
   - [ ] outputs:
-    - [ ] reference time index at last new input note (ms)
-    - [ ] time warp factor at last new matching note
-    - [ ] list of ignored new input notes (ms+pitch)
-  - [ ] support only monophony (order of events matters)
-  - [ ] ignore unexpected (wrong/extra) notes
-  - [ ] keep waiting for next correct note
+    - [x] reference time index at last new input note (ms)
+    - [ ] time stretch factor at last new matching note
+    - [x] list of ignored new input notes (ms+pitch)
+  - [x] support only monophony (order of events matters)
+  - [x] ignore unexpected (wrong/extra) notes
+  - [x] keep waiting for next correct note
 - [ ] unit tests for `selim-0.1.0`
 - [ ] function to turn a MIDI file into an in-memory reference score (ms+pitch)
   - [ ] use only the first track which contains meaningful MIDI data
@@ -78,12 +78,12 @@ Status and roadmap
     - [ ] real-time ms+pitch events on stdin
   - [ ] outputs on stdout:
     - [ ] reference time index at last new input note (ms)
-    - [ ] reference time warp factor at last new input note
+    - [ ] reference time stretch factor at last new input note
     - [ ] ignored input notes
 - [ ] wrong/missed/extra note tolerant score follower algorithm `selim-0.1.1`
   - [ ] match new input notes with future reference notes within a time window
   - [ ] jump directly to first matching note
-- [ ] time warp factor adjustment limit in `selim-0.1.2`
+- [ ] time stretch factor adjustment limit in `selim-0.1.2`
 - [ ] refine MIDI file interpretation (ms+pitch+vel+dur)
   - [ ] take tempo changes into account when converting to milliseconds
   - [ ] include velocity
