@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 /// A note with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy)]
 pub struct ScoreNote {
@@ -5,18 +7,15 @@ pub struct ScoreNote {
     pitch: u8,
 }
 
-fn find_next_match_after(score: &Vec<ScoreNote>, score_index: usize, pitch: u8) -> Option<usize> {
-    match score[score_index..]
+fn find_next_match_after(score: &[ScoreNote], score_index: usize, pitch: u8) -> Option<usize> {
+    score[score_index..]
         .iter()
         .position(|score_note| score_note.pitch == pitch)
-    {
-        Some(i) => Some(score_index + i),
-        None => None,
-    }
+        .map(|i| score_index + i)
 }
 
 fn time_difference(
-    score: &Vec<ScoreNote>,
+    score: &[ScoreNote],
     index1: Option<usize>,
     index2: Option<usize>,
 ) -> Option<u32> {
@@ -27,8 +26,8 @@ fn time_difference(
 }
 
 fn find_newest_match(
-    score: &Vec<ScoreNote>,
-    live: &Vec<ScoreNote>,
+    score: &[ScoreNote],
+    live: &[ScoreNote],
     prev_match_score_index: Option<usize>,
     new_live_index: usize,
 ) -> (Option<usize>, Option<usize>, Vec<usize>) {
@@ -39,7 +38,7 @@ fn find_newest_match(
     let (mut next_match_score_index, mut next_match_live_index) = (None, None);
     let mut ignored: Vec<usize> = vec![];
     for (live_index, live_note) in live.iter().enumerate().skip(new_live_index) {
-        let matching_index = find_next_match_after(&score, score_index, live_note.pitch);
+        let matching_index = find_next_match_after(score, score_index, live_note.pitch);
         match matching_index {
             Some(i) => {
                 next_match_live_index = Some(live_index);
@@ -65,12 +64,12 @@ fn get_stretch_factor(
 
 /// Returns the score time in milliseconds corresponding to the latest live note
 /// (whether matched or unmatched)
-/// 
+///
 /// Corrects the elapsed time since the last match using the calculated stretch factor,
 /// and adds that to the score time of the last match.
 fn get_score_time(
-    score: &Vec<ScoreNote>,
-    live: &Vec<ScoreNote>,
+    score: &[ScoreNote],
+    live: &[ScoreNote],
     prev_score_index: Option<usize>,
     prev_live_index: Option<usize>,
     stretch_factor: f32,
@@ -183,7 +182,7 @@ mod tests {
         assert_eq!(stretch_factor, 1.0);
         assert_eq!(last_match_score, Some(0));
         assert_eq!(last_match_live, Some(0));
-        assert_eq!(ignored.is_empty(), true);
+        assert!(ignored.is_empty());
     }
 
     #[test]
@@ -195,7 +194,7 @@ mod tests {
         assert_eq!(stretch_factor, 1.0);
         assert_eq!(last_match_score, Some(0));
         assert_eq!(last_match_live, Some(0));
-        assert_eq!(ignored.is_empty(), true);
+        assert!(ignored.is_empty());
     }
 
     #[test]
@@ -207,7 +206,7 @@ mod tests {
         assert_eq!(stretch_factor, 0.5);
         assert_eq!(last_match_score, Some(1));
         assert_eq!(last_match_live, Some(1));
-        assert_eq!(ignored.is_empty(), true);
+        assert!(ignored.is_empty());
     }
 
     #[test]
@@ -231,6 +230,6 @@ mod tests {
         assert_eq!(stretch_factor, 0.25);
         assert_eq!(last_match_score, Some(2));
         assert_eq!(last_match_live, Some(1));
-        assert_eq!(ignored.is_empty(), true);
+        assert!(ignored.is_empty());
     }
 }
