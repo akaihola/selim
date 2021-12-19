@@ -232,4 +232,16 @@ mod tests {
         assert_eq!(last_match_live, Some(1));
         assert!(ignored.is_empty());
     }
+
+    #[test]
+    fn only_wrong_notes() {
+        let live = notes![(5, 60), (55, 63), (105, 66)];
+        let (time, stretch_factor, last_match_score, last_match_live, ignored) =
+            follow_score(&TEST_SCORE, &live, Some(0), Some(0), 1, 1.0);
+        assert_eq!(time, 1100);
+        assert_approx_eq!(stretch_factor, 1.0);
+        assert_eq!(last_match_score, None);
+        assert_eq!(last_match_live, None);
+        assert_eq!(ignored, vec![1, 2]);
+    }
 }
