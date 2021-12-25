@@ -1,11 +1,7 @@
-#![warn(clippy::all)]
+use crate::score::ScoreNote;
 
-/// A note with a given pitch at a given timestamp in a score or in a live performance
-#[derive(Clone, Copy)]
-pub struct ScoreNote {
-    time: u32,
-    pitch: u8,
-}
+#[macro_use]
+mod score;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Match {
