@@ -51,15 +51,9 @@ fn run(device: DeviceSpec) -> Result<(), Box<dyn Error>> {
     // Get an input port (read from console if multiple are available)
     let in_ports = midi_in.ports();
     let num_ports = in_ports.len();
-    let in_port = match (num_ports, device) {
+    let (device_number, message) = match (num_ports, device) {
         (0, _) => return Err("no input port found".into()),
-        (1, DeviceSpec::None) => {
-            eprintln!(
-                "Choosing the only available input port: {}",
-                midi_in.port_name(&in_ports[0]).unwrap()
-            );
-            &in_ports[0]
-        }
+        (1, DeviceSpec::None) => (0, "Choosing the only available input port"),
         (_, DeviceSpec::Name(device_name)) => {
             let mut items = in_ports.iter().enumerate();
             loop {
@@ -67,8 +61,7 @@ fn run(device: DeviceSpec) -> Result<(), Box<dyn Error>> {
                     Some((i, p)) => {
                         let port_name = midi_in.port_name(p).unwrap();
                         if port_name.contains(&device_name) {
-                            eprintln!("Choosing input port {} {}", i, port_name);
-                            break &in_ports[i];
+                            break (i, "Choosing input port {} {}");
                         };
                     }
                     None => {
@@ -93,14 +86,7 @@ fn run(device: DeviceSpec) -> Result<(), Box<dyn Error>> {
                 )
                 .into());
             }
-            let in_port = &in_ports[device_number];
-            let in_port_name = midi_in.port_name(in_port);
-            eprintln!(
-                "Choosing input port {}: {:?}",
-                device_number,
-                in_port_name.unwrap()
-            );
-            in_port
+            (device_number, "Choosing input port")
         }
         (_, DeviceSpec::None) => {
             eprintln!("\nAvailable input ports:");
@@ -111,14 +97,14 @@ fn run(device: DeviceSpec) -> Result<(), Box<dyn Error>> {
             stdout().flush()?;
             let mut input = String::new();
             stdin().read_line(&mut input)?;
-            in_ports
-                .get(input.trim().parse::<usize>()?)
-                .ok_or("invalid input port selected")?
+            (input.trim().parse::<usize>()?, "Selecting input port")
         }
     };
 
-    eprintln!("\nOpening connection");
+    let in_port = &in_ports[device_number];
     let in_port_name = midi_in.port_name(in_port)?;
+    eprint!("{} {} {}", message, device_number, in_port_name);
+    eprintln!("\nOpening connection");
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive
     // until the end of the scope
