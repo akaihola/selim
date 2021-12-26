@@ -5,7 +5,7 @@ use std::boxed::Box;
 use std::error::Error;
 use std::io::stdin;
 use structopt::StructOpt;
-use selim::device::{DeviceSelector, get_midi_in_port};
+use selim::device::{DeviceSelector, find_port};
 
 #[derive(StructOpt)]
 struct Cli {
@@ -44,7 +44,7 @@ fn callback<T>(microsecond: u64, message: &[u8], _: &mut T) {
 fn run(device: DeviceSelector) -> Result<(), Box<dyn Error>> {
     let mut midi_input = MidiInput::new("selim")?;
     midi_input.ignore(Ignore::All);
-    let in_port = get_midi_in_port(&midi_input, device);
+    let in_port = find_port(&midi_input, device).unwrap();
     let in_port_name = midi_input.port_name(&in_port);
     // _conn_in needs to be a named parameter, because it needs to be kept alive
     // until the end of the scope
