@@ -2,6 +2,7 @@ use crate::score::ScoreNote;
 
 #[macro_use]
 mod score;
+pub mod device;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Match {
