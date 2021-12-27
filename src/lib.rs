@@ -1,7 +1,8 @@
+use midly::num::u7;
 use crate::score::ScoreNote;
 
 #[macro_use]
-mod score;
+pub mod score;
 pub mod device;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -20,7 +21,7 @@ impl Match {
 }
 
 /// Finds the next note with given `pitch`, starting from `score[index]`
-fn find_next_match_starting_at(score: &[ScoreNote], index: usize, pitch: u8) -> Option<usize> {
+fn find_next_match_starting_at(score: &[ScoreNote], index: usize, pitch: u7) -> Option<usize> {
     score[index..]
         .iter()
         .position(|note| note.pitch == pitch)
@@ -28,7 +29,7 @@ fn find_next_match_starting_at(score: &[ScoreNote], index: usize, pitch: u8) -> 
 }
 
 /// Calculates the time difference between notes `score[index1]` and `score[index2]`
-fn time_difference(score: &[ScoreNote], index1: usize, index2: usize) -> u32 {
+fn time_difference(score: &[ScoreNote], index1: usize, index2: usize) -> u64 {
     score[index2].time - score[index1].time
 }
 
@@ -83,7 +84,7 @@ fn find_new_matches(
 /// # Return value
 ///
 /// The ratio between `elapsed_live` and `elapsed_score`
-fn get_stretch_factor(elapsed_score: u32, elapsed_live: u32) -> f32 {
+fn get_stretch_factor(elapsed_score: u64, elapsed_live: u64) -> f32 {
     (elapsed_live as f32) / (elapsed_score as f32)
 }
 
@@ -111,14 +112,14 @@ fn get_score_time(
     live: &[ScoreNote],
     prev_match: Option<Match>,
     stretch_factor: f32,
-) -> u32 {
+) -> u64 {
     let prev_score_time = score[prev_match.map(|m| m.score_index).unwrap_or(0)].time;
     let elapsed_live = time_difference(
         live,
         prev_match.map(|m| m.live_index).unwrap_or(0),
         live.len() - 1,
     );
-    prev_score_time + (elapsed_live as f32 / stretch_factor) as u32
+    prev_score_time + (elapsed_live as f32 / stretch_factor) as u64
 }
 
 /// Matches incoming notes with next notes in the score.
@@ -176,7 +177,7 @@ pub fn follow_score(
     prev_match: Option<Match>,
     new_live_index: usize,
     prev_stretch_factor: f32,
-) -> (u32, f32, Vec<Match>, Vec<usize>) {
+) -> (u64, f32, Vec<Match>, Vec<usize>) {
     let (new_matches, ignored) = find_new_matches(
         score,
         live,
@@ -207,16 +208,11 @@ pub fn follow_score(
 mod tests {
     use super::*;
     use assert_approx_eq::assert_approx_eq;
+    use once_cell::sync::Lazy;
 
-    macro_rules! notes {
-        (
-            $( ($t: expr, $p: expr) ),+
-        ) => {
-            [ $( ScoreNote {time: $t, pitch: $p} ),+ ]
-        }
-    }
-
-    const TEST_SCORE: [ScoreNote; 3] = notes![(1000, 60), (1100, 62), (1200, 64)];
+    static TEST_SCORE: Lazy<[ScoreNote; 3]> = Lazy::new(|| {
+        notes![(1000, 60), (1100, 62), (1200, 64)]
+    });
 
     #[test]
     fn match_the_only_note() {
@@ -234,7 +230,7 @@ mod tests {
     fn match_first() {
         let live = notes![(5, 60)];
         let (time, stretch_factor, new_matches, ignored) =
-            follow_score(&TEST_SCORE, &live, None, 0, 1.0);
+            follow_score(&*TEST_SCORE, &live, None, 0, 1.0);
         assert_eq!(time, 1000);
         assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(new_matches, [Match::new(0, 0)]);
@@ -245,7 +241,7 @@ mod tests {
     fn match_second() {
         let live = notes![(5, 60), (55, 62)];
         let (time, stretch_factor, new_matches, ignored) =
-            follow_score(&TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
+            follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
         assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(new_matches, [Match::new(1, 1)]);
@@ -256,7 +252,7 @@ mod tests {
     fn skip_extra_note() {
         let live = notes![(5, 60), (25, 61), (55, 62)];
         let (time, stretch_factor, new_matches, ignored) =
-            follow_score(&TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
+            follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
         assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(new_matches, [Match::new(1, 2)]);
@@ -267,7 +263,7 @@ mod tests {
     fn skip_missing_note() {
         let live = notes![(5, 60), (55, 64)];
         let (time, stretch_factor, new_matches, ignored) =
-            follow_score(&TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
+            follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
         assert_eq!(time, 1200);
         assert_approx_eq!(stretch_factor, 0.25);
         assert_eq!(new_matches, [Match::new(2, 1)]);
@@ -278,7 +274,7 @@ mod tests {
     fn only_wrong_notes() {
         let live = notes![(5, 60), (55, 63), (105, 66)];
         let (time, stretch_factor, new_matches, ignored) =
-            follow_score(&TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
+            follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
         assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 1.0);
         assert!(new_matches.is_empty());
