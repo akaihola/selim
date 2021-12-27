@@ -1,11 +1,11 @@
 use midir::{Ignore, MidiInput};
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::MidiMessage::NoteOn;
+use selim::device::{find_port, DeviceSelector};
 use std::boxed::Box;
 use std::error::Error;
 use std::io::stdin;
 use structopt::StructOpt;
-use selim::device::{DeviceSelector, find_port};
 
 #[derive(StructOpt)]
 struct Cli {
