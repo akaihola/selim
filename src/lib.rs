@@ -7,8 +7,8 @@ pub mod device;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Match {
-    score_index: usize,
-    live_index: usize,
+    pub score_index: usize,
+    pub live_index: usize,
 }
 
 impl Match {
