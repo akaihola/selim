@@ -104,4 +104,35 @@ mod tests {
             notes![(0, 48), (0, 72), (500000, 72), (500000, 76), (500000, 48)]
         );
     }
+
+    #[test]
+    fn load_midi_file_clementi_track_1_channel_1() {
+        let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
+        let score = load_midi_file(&path, &[(1, &[u4::from(0)])]);
+        assert_eq!(score.len(), 908);
+        assert_eq!(
+            score[..5],
+            notes![
+                (0, 72),
+                (500000, 72),
+                (500000, 76),
+                (750000, 76),
+                (750000, 72)
+            ]
+        );
+    }
+
+    #[test]
+    fn load_midi_file_clementi_track_1_channel_2() {
+        let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
+        let score = load_midi_file(&path, &[(1, &[u4::from(1)])]);
+        assert_eq!(score.len(), 0);
+    }
+
+    #[test]
+    fn load_midi_file_clementi_track_3_channel_2() {
+        let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
+        let score = load_midi_file(&path, &[(1, &[u4::from(2)])]);
+        assert_eq!(score.len(), 0);
+    }
 }
