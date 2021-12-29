@@ -1,5 +1,5 @@
+use midly::{MidiMessage::NoteOn, TrackEventKind::Midi};
 use std::env;
-use midly::{TrackEvent, TrackEventKind::Midi, MidiMessage::NoteOn};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -17,17 +17,17 @@ fn main() {
     let track = &smf.tracks[0];
     println!("first track has {} events!", track.len());
 
-    let musical_events: Vec<&TrackEvent> = track
-        .into_iter()
-        .filter(|event| match event.kind {
-            Midi {
-                channel,
-                message: NoteOn{key: _, vel: _},
-            } => channel == 1,
-            _ => false,
-        })
-        .collect();
-    println!("first track has {} 'note on' events on channel 1!", musical_events.len());
+    let musical_events = track.iter().filter(|event| match event.kind {
+        Midi {
+            channel,
+            message: NoteOn { key: _, vel: _ },
+        } => channel == 1,
+        _ => false,
+    });
+    println!(
+        "first track has {} 'note on' events on channel 1!",
+        musical_events.count()
+    );
 
     // Modify the file
     smf.header.format = midly::Format::Sequential;
