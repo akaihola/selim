@@ -112,11 +112,7 @@ fn run(
         matches.extend(new_matches.iter());
         new_live_index = live.len();
         prev_stretch_factor = stretch_factor;
-        prev_match = if matches.is_empty() {
-            None
-        } else {
-            Some(matches[matches.len() - 1])
-        };
+        prev_match = matches.last().cloned();
     }
 }
 
