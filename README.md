@@ -88,3 +88,11 @@ Status and roadmap
   - [ ] take tempo changes into account when converting to milliseconds
   - [ ] include velocity
   - [ ] convert "note off" events to durations
+
+
+Resources
+---------
+
+- [Playing back a midi with midly: how to organise the ecosystem][playback-ecosystem] (Rust Audio Discourse group)
+
+[playback-ecosystem]: https://rust-audio.discourse.group/t/playing-back-a-midi-with-midly-how-to-organise-the-ecosystem/423

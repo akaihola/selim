@@ -14,20 +14,24 @@ fn main() {
     // Use the information
     println!("midi file has {} tracks!", smf.tracks.len());
 
-    let track = &smf.tracks[0];
-    println!("first track has {} events!", track.len());
-
-    let musical_events = track.iter().filter(|event| match event.kind {
-        Midi {
-            channel,
-            message: NoteOn { key: _, vel: _ },
-        } => channel == 1,
-        _ => false,
-    });
-    println!(
-        "first track has {} 'note on' events on channel 1!",
-        musical_events.count()
-    );
+    for (track_num, track) in smf.tracks.iter().enumerate() {
+        println!("track {} has {} events", track_num + 1, track.len());
+        for c in 0..16 {
+            let musical_events = track.iter().filter(|event| match event.kind {
+                Midi {
+                    channel,
+                    message: NoteOn { key: _, vel: _ },
+                } => channel == c,
+                _ => false,
+            });
+            println!(
+                "track {} has {} 'note on' events on channel {}",
+                track_num + 1,
+                musical_events.count(),
+                c + 1
+            );
+        }
+    }
 
     // Modify the file
     smf.header.format = midly::Format::Sequential;
