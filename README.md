@@ -47,7 +47,7 @@ Status and roadmap
 - [x] choose MIDI parser library
 - [x] ensure we can get data from MIDI files using the chosen MIDI parser (midly)
 - [x] data type for an in-memory reference score (milliseconds and pitches)
-- [ ] first naïve stateless score follower algorithm `selim-0.1.0`
+- [x] first naïve stateless score follower algorithm `selim-0.1.0`
   - [x] inputs:
     - [x] complete reference score (ms+pitch)
     - [x] complete live input so far (ms+pitch)
@@ -55,37 +55,37 @@ Status and roadmap
     - [x] position of last matching previous input note in the live input
     - [x] position of first new note in the live input
     - [x] time stretch factor at last matching note
-  - [ ] outputs:
+  - [x] outputs:
     - [x] reference time index at last new input note (ms)
-    - [ ] time stretch factor at last new matching note
+    - [x] time stretch factor at last new matching note
     - [x] list of ignored new input notes (ms+pitch)
   - [x] support only monophony (order of events matters)
   - [x] ignore unexpected (wrong/extra) notes
   - [x] keep waiting for next correct note
 - [ ] unit tests for `selim-0.1.0`
 - [ ] function to turn a MIDI file into an in-memory reference score (ms+pitch)
-  - [ ] use only the first track which contains meaningful MIDI data
-  - [ ] use only the first channel which contains meaningful MIDI data
-  - [ ] use only "note on" events
-  - [ ] ignore velocity
-  - [ ] convert time offsets to milliseconds (disregarding tempo for now)
-  - [ ] tool to output reference score on stdout
-- [ ] choose MIDI input library
-- [ ] real-time tool to convert MIDI input into ms+pitch events on stdout
-- [ ] real-time tool to test out `selim-0.1.x`
-  - [ ] inputs:
-    - [ ] reference MIDI file
-    - [ ] real-time ms+pitch events on stdin
-  - [ ] outputs on stdout:
-    - [ ] reference time index at last new input note (ms)
-    - [ ] reference time stretch factor at last new input note
-    - [ ] ignored input notes
+  - [x] use only "note on" events
+  - [x] ignore velocity
+  - [x] convert time offsets to microseconds (taking tempo changes into account)
+  - [x] tool to output reference score on stdout
+  - [x] pick one hard-coded track
+  - [x] pick one hard-coded channel
+  - [ ] pick tracks and channels specified in arguments
+- [x] choose MIDI input library
+- [x] real-time tool to convert MIDI input into ms+pitch events on stdout
+- [x] real-time tool to test out `selim-0.1.x`
+  - [x] inputs:
+    - [x] reference MIDI file
+    - [x] real-time ms+pitch events on stdin
+  - [x] outputs on stdout:
+    - [x] reference time index at last new input note (ms)
+    - [x] reference time stretch factor at last new input note
+    - [x] ignored input notes
 - [ ] wrong/missed/extra note tolerant score follower algorithm `selim-0.1.1`
   - [ ] match new input notes with future reference notes within a time window
-  - [ ] jump directly to first matching note
+  - [x] jump directly to first matching note
 - [ ] time stretch factor adjustment limit in `selim-0.1.2`
 - [ ] refine MIDI file interpretation (ms+pitch+vel+dur)
-  - [ ] take tempo changes into account when converting to milliseconds
   - [ ] include velocity
   - [ ] convert "note off" events to durations
 
