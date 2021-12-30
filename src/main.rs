@@ -81,7 +81,7 @@ fn run(
     let _conn_in = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
 
     eprintln!(
-        "Connection open, reading input from '{}' (press enter to exit) ...",
+        "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
         in_port_name.unwrap()
     );
 
