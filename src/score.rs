@@ -2,10 +2,10 @@ use midi_reader_writer::{midly_0_5::merge_tracks, ConvertTicksToMicroseconds};
 use midly::{
     num::{u4, u7},
     MidiMessage::NoteOn,
-    TrackEventKind::Midi,
+    TrackEventKind::{self, Midi},
 };
 use once_cell::sync::Lazy;
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 /// A note with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,7 +58,10 @@ fn make_tracks_and_channels_index<'a>(
     track_channels
 }
 
-pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
+pub fn load_raw_midi_file<'a>(
+    path: &Path,
+    channels: &[(usize, &[u4])],
+) -> Vec<(Duration, TrackEventKind<'a>)> {
     let data = std::fs::read(path).unwrap();
     let smf = midly::Smf::parse(&data).unwrap();
     let mut ticks_to_microseconds = ConvertTicksToMicroseconds::try_from(smf.header).unwrap();
@@ -67,18 +70,12 @@ pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote
         .filter_map(|(ticks, track_index, event)| {
             match (track_channels[track_index].len(), event) {
                 (0, _) => None,
-                (
-                    _,
-                    Midi {
-                        channel,
-                        message: NoteOn { key, vel: _ },
-                    },
-                ) => {
+                (_, Midi { channel, message }) => {
                     if track_channels[track_index].contains(&channel) {
-                        Some(ScoreNote {
-                            time: ticks_to_microseconds.convert(ticks, &event),
-                            pitch: key,
-                        })
+                        Some((
+                            Duration::from_micros(ticks_to_microseconds.convert(ticks, &event)),
+                            Midi { channel, message },
+                        ))
                     } else {
                         None
                     }
@@ -87,6 +84,20 @@ pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote
             }
         })
         .collect()
+}
+
+pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
+    let raw = load_raw_midi_file(path, channels);
+    raw.iter().filter_map(|(time, event)| match event {
+        Midi {
+            channel: _,
+            message: NoteOn { key, vel: _ },
+        } => Some(ScoreNote {
+            time: time.as_micros() as u64,
+            pitch: *key,
+        }),
+        _ => None,
+    }).collect()
 }
 
 const NOTE_NAMES: [&str; 12] = [

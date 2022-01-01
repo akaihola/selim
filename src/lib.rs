@@ -1,9 +1,10 @@
 use midly::num::u7;
 use crate::score::ScoreNote;
 
+pub mod cmdline;
+pub mod device;
 #[macro_use]
 pub mod score;
-pub mod device;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Match {
@@ -88,40 +89,6 @@ fn get_stretch_factor(elapsed_score: u64, elapsed_live: u64) -> f32 {
     (elapsed_live as f32) / (elapsed_score as f32)
 }
 
-/// Returns the score time in milliseconds corresponding to the latest live note
-/// (whether matched or unmatched)
-///
-/// This can be the exact time index of the latest performed note in the expected score,
-/// in case a match was found for that performed note. If no match was found (i.e. it's
-/// a wrong or an extra note), an estimate based on the last previous match and the
-/// current time stretch factor is returned.
-///
-/// # Arguments
-///
-/// * score - The complete expected musical score with timestamps and pitches
-/// * live - The live performance recorded so far, with timestamps and pitches
-/// * prev_match - The index, in the score and in the live performance, for a matching
-///                note.
-/// * stretch_factor - The time stretch factor to use
-///
-/// # Return value
-///
-/// The estimated current time in the expected score in milliseconds.
-fn get_score_time(
-    score: &[ScoreNote],
-    live: &[ScoreNote],
-    prev_match: Option<Match>,
-    stretch_factor: f32,
-) -> u64 {
-    let prev_score_time = score[prev_match.map(|m| m.score_index).unwrap_or(0)].time;
-    let elapsed_live = time_difference(
-        live,
-        prev_match.map(|m| m.live_index).unwrap_or(0),
-        live.len() - 1,
-    );
-    prev_score_time + (elapsed_live as f32 / stretch_factor) as u64
-}
-
 /// Matches incoming notes with next notes in the score.
 /// This is a super naïve algorithm which
 /// * supports only monophony (order of events matters),
@@ -177,7 +144,7 @@ pub fn follow_score(
     prev_match: Option<Match>,
     new_live_index: usize,
     prev_stretch_factor: f32,
-) -> (u64, f32, Vec<Match>, Vec<usize>) {
+) -> (f32, Vec<Match>, Vec<usize>) {
     let (new_matches, ignored) = find_new_matches(
         score,
         live,
@@ -200,8 +167,7 @@ pub fn follow_score(
         }
         _ => prev_stretch_factor,
     };
-    let score_time = get_score_time(score, live, prev_match, stretch_factor);
-    (score_time, stretch_factor, new_matches, ignored)
+    (stretch_factor, new_matches, ignored)
 }
 
 #[cfg(test)]
@@ -218,9 +184,8 @@ mod tests {
     fn match_the_only_note() {
         let score = notes![(1000, 60)];
         let live = notes![(5, 60)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&score, &live, None, 0, 1.0);
-        assert_eq!(time, 1000);
         assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(new_matches, [Match::new(0, 0)]);
         assert!(ignored.is_empty());
@@ -229,9 +194,8 @@ mod tests {
     #[test]
     fn match_first() {
         let live = notes![(5, 60)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&*TEST_SCORE, &live, None, 0, 1.0);
-        assert_eq!(time, 1000);
         assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(new_matches, [Match::new(0, 0)]);
         assert!(ignored.is_empty());
@@ -240,9 +204,8 @@ mod tests {
     #[test]
     fn match_second() {
         let live = notes![(5, 60), (55, 62)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
-        assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(new_matches, [Match::new(1, 1)]);
         assert!(ignored.is_empty());
@@ -251,9 +214,8 @@ mod tests {
     #[test]
     fn skip_extra_note() {
         let live = notes![(5, 60), (25, 61), (55, 62)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
-        assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 0.5);
         assert_eq!(new_matches, [Match::new(1, 2)]);
         assert_eq!(ignored, vec![1]);
@@ -262,9 +224,8 @@ mod tests {
     #[test]
     fn skip_missing_note() {
         let live = notes![(5, 60), (55, 64)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
-        assert_eq!(time, 1200);
         assert_approx_eq!(stretch_factor, 0.25);
         assert_eq!(new_matches, [Match::new(2, 1)]);
         assert!(ignored.is_empty());
@@ -273,9 +234,8 @@ mod tests {
     #[test]
     fn only_wrong_notes() {
         let live = notes![(5, 60), (55, 63), (105, 66)];
-        let (time, stretch_factor, new_matches, ignored) =
+        let (stretch_factor, new_matches, ignored) =
             follow_score(&*TEST_SCORE, &live, Some(Match::new(0, 0)), 1, 1.0);
-        assert_eq!(time, 1100);
         assert_approx_eq!(stretch_factor, 1.0);
         assert!(new_matches.is_empty());
         assert_eq!(ignored, vec![1, 2]);
