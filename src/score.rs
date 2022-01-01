@@ -10,7 +10,7 @@ use std::{path::Path, time::Duration};
 /// A note with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreNote {
-    pub time: u64,
+    pub time: Duration,
     pub pitch: u7,
 }
 
@@ -18,7 +18,7 @@ macro_rules! notes {
     (
         $( ($t: expr, $p: expr) ),+
     ) => {
-        [ $( ScoreNote {time: $t, pitch: u7::from($p)} ),+ ]
+        [ $( ScoreNote {time: Duration::from_micros($t), pitch: u7::from($p)} ),+ ]
     }
 }
 
@@ -93,7 +93,7 @@ pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote
             channel: _,
             message: NoteOn { key, vel: _ },
         } => Some(ScoreNote {
-            time: time.as_micros() as u64,
+            time: *time,
             pitch: *key,
         }),
         _ => None,

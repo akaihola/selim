@@ -1,5 +1,6 @@
 use midly::num::u7;
 use crate::score::ScoreNote;
+use std::time::Duration;
 
 pub mod cmdline;
 pub mod device;
@@ -30,7 +31,7 @@ fn find_next_match_starting_at(score: &[ScoreNote], index: usize, pitch: u7) -> 
 }
 
 /// Calculates the time difference between notes `score[index1]` and `score[index2]`
-fn time_difference(score: &[ScoreNote], index1: usize, index2: usize) -> u64 {
+fn time_difference(score: &[ScoreNote], index1: usize, index2: usize) -> Duration {
     score[index2].time - score[index1].time
 }
 
@@ -85,8 +86,8 @@ fn find_new_matches(
 /// # Return value
 ///
 /// The ratio between `elapsed_live` and `elapsed_score`
-fn get_stretch_factor(elapsed_score: u64, elapsed_live: u64) -> f32 {
-    (elapsed_live as f32) / (elapsed_score as f32)
+fn get_stretch_factor(elapsed_score: Duration, elapsed_live: Duration) -> f32 {
+    elapsed_live.as_secs_f32() / elapsed_score.as_secs_f32()
 }
 
 /// Matches incoming notes with next notes in the score.

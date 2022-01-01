@@ -32,7 +32,7 @@ fn callback(microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
     } = event
     {
         tx.send(ScoreNote {
-            time: microsecond,
+            time: Duration::from_micros(microsecond),
             pitch: key,
         })
         .unwrap();
@@ -136,7 +136,7 @@ fn play_next(
     if head >= score.len() {
         return (head, Duration::from_secs(1));
     }
-    let prev_match_time = Duration::from_micros(input_score[prev_match.score_index].time);
+    let prev_match_time = input_score[prev_match.score_index].time;
     let wall_time_since_prev_match = SystemTime::now().duration_since(prev_system_time).unwrap();
     let score_time_since_prev_match =
         (1000.0 * prev_stretch_factor) as u32 * wall_time_since_prev_match / 1000;
@@ -170,7 +170,7 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
         print!(
             "score {:>3} {:>7.3} expect {}",
             score_next,
-            input_score[score_next].time as f64 / 1000000.0,
+            input_score[score_next].time.as_secs_f32(),
             pitch_to_name(input_score[score_next].pitch),
         );
     } else {
@@ -190,7 +190,7 @@ fn print_got(
         ", got {} at live {:>3} {:>7.3} -> {:>5.1}% {:?} {:?}",
         pitch_to_name(note.pitch),
         live.len() - 1,
-        note.time as f64 / 1000000.0,
+        note.time.as_secs_f32(),
            100.0 * stretch_factor,
         new_matches
             .iter()

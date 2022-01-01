@@ -10,6 +10,6 @@ fn main() {
     // Iterate over the events from all tracks:
     println!("time;pitch");
     for note in score.iter() {
-        println!("{};{}", note.time, note.pitch);
+        println!("{};{}", note.time.as_micros(), note.pitch);
     }
 }
