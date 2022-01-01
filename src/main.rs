@@ -3,7 +3,7 @@ use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::num::u4;
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
-use selim::cmdline::{parse_args};
+use selim::cmdline::parse_args;
 use selim::device::{find_port, DeviceSelector};
 use selim::score::{load_midi_file, load_raw_midi_file, pitch_to_name, ScoreNote};
 use selim::{follow_score, Match};
@@ -12,7 +12,6 @@ use std::error::Error;
 use std::io::{stdout, Write};
 use std::sync::mpsc::{self, Sender};
 use std::time::{Duration, SystemTime};
-
 
 fn main() {
     let (args, device, playback_device) = parse_args();
@@ -98,13 +97,7 @@ fn run(
         if !new_matches.is_empty() {
             system_time_at_last_match = Some(SystemTime::now());
         }
-        print_got(
-            &live,
-            note,
-            stretch_factor,
-            &new_matches,
-            &ignored,
-        );
+        print_got(&live, note, stretch_factor, &new_matches, &ignored);
         matches.extend(new_matches.iter());
         new_live_index = live.len();
         prev_stretch_factor = stretch_factor;
@@ -182,7 +175,7 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
 fn print_got(
     live: &[ScoreNote],
     note: ScoreNote,
-       stretch_factor: f32,
+    stretch_factor: f32,
     new_matches: &[Match],
     ignored: &[usize],
 ) {
@@ -191,7 +184,7 @@ fn print_got(
         pitch_to_name(note.pitch),
         live.len() - 1,
         note.time.as_secs_f32(),
-           100.0 * stretch_factor,
+        100.0 * stretch_factor,
         new_matches
             .iter()
             .map(|m| {

@@ -1,5 +1,5 @@
-use midly::num::u7;
 use crate::score::ScoreNote;
+use midly::num::u7;
 use std::time::Duration;
 
 pub mod cmdline;
@@ -177,16 +177,14 @@ mod tests {
     use assert_approx_eq::assert_approx_eq;
     use once_cell::sync::Lazy;
 
-    static TEST_SCORE: Lazy<[ScoreNote; 3]> = Lazy::new(|| {
-        notes![(1000, 60), (1100, 62), (1200, 64)]
-    });
+    static TEST_SCORE: Lazy<[ScoreNote; 3]> =
+        Lazy::new(|| notes![(1000, 60), (1100, 62), (1200, 64)]);
 
     #[test]
     fn match_the_only_note() {
         let score = notes![(1000, 60)];
         let live = notes![(5, 60)];
-        let (stretch_factor, new_matches, ignored) =
-            follow_score(&score, &live, None, 0, 1.0);
+        let (stretch_factor, new_matches, ignored) = follow_score(&score, &live, None, 0, 1.0);
         assert_approx_eq!(stretch_factor, 1.0);
         assert_eq!(new_matches, [Match::new(0, 0)]);
         assert!(ignored.is_empty());

@@ -88,16 +88,18 @@ pub fn load_raw_midi_file<'a>(
 
 pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
     let raw = load_raw_midi_file(path, channels);
-    raw.iter().filter_map(|(time, event)| match event {
-        Midi {
-            channel: _,
-            message: NoteOn { key, vel: _ },
-        } => Some(ScoreNote {
-            time: *time,
-            pitch: *key,
-        }),
-        _ => None,
-    }).collect()
+    raw.iter()
+        .filter_map(|(time, event)| match event {
+            Midi {
+                channel: _,
+                message: NoteOn { key, vel: _ },
+            } => Some(ScoreNote {
+                time: *time,
+                pitch: *key,
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 const NOTE_NAMES: [&str; 12] = [
