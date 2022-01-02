@@ -5,7 +5,7 @@ use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
 use selim::cmdline::parse_args;
 use selim::device::{find_port, DeviceSelector};
-use selim::score::{load_midi_file, load_raw_midi_file, pitch_to_name, ScoreNote};
+use selim::score::{load_midi_file, load_raw_midi_file, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
 use std::error::Error;
@@ -42,7 +42,7 @@ fn run(
     device: DeviceSelector,
     playback_device: DeviceSelector,
     input_score: Vec<ScoreNote>,
-    playback_score: Vec<(Duration, TrackEventKind)>,
+    playback_score: Vec<ScoreEvent>,
 ) -> Result<(), Box<dyn Error>> {
     assert!(!input_score.is_empty());
 
@@ -67,9 +67,9 @@ fn run(
     let mut live = vec![];
     let mut prev_match = None;
     let mut new_live_index = 0;
-    let mut prev_stretch_factor = 1.0;
     let mut matches = vec![];
     let mut playback_head = 0;
+    let mut live_start_time = None;
     let mut system_time_at_last_match = None;
     loop {
         print_expect(&input_score, prev_match);
@@ -81,34 +81,34 @@ fn run(
                 playback_head,
                 p,
                 s,
-                prev_stretch_factor,
+                SystemTime::now(),
             );
             playback_head = _new_playback_head;
         }
         let note = rx.recv().unwrap();
+        let live_time = match live_start_time {
+            None => {
+                live_start_time = Some(SystemTime::now());
+                Duration::new(0, 0)
+            }
+            Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
+        };
         live.push(note);
-        let (stretch_factor, new_matches, ignored) = follow_score(
-            &input_score,
-            &live,
-            prev_match,
-            new_live_index,
-            prev_stretch_factor,
-        );
+        let (new_matches, ignored) =
+            follow_score(&input_score, &live, prev_match, new_live_index, live_time);
         if !new_matches.is_empty() {
             system_time_at_last_match = Some(SystemTime::now());
         }
-        print_got(&live, note, stretch_factor, &new_matches, &ignored);
+        print_got(&live, note, &new_matches, &ignored);
         matches.extend(new_matches.iter());
         new_live_index = live.len();
-        prev_stretch_factor = stretch_factor;
         prev_match = matches.last().cloned();
     }
 }
 
-fn play_note(score_note: (Duration, TrackEventKind), connection: &mut MidiOutputConnection) {
-    let (_time, event) = score_note;
-    if let TrackEventKind::Midi { .. } = event {
-        let ev = nodi::Event::try_from(event).unwrap();
+fn play_note(score_note: &ScoreEvent, connection: &mut MidiOutputConnection) {
+    if let TrackEventKind::Midi { .. } = score_note.message {
+        let ev = nodi::Event::try_from(score_note.message).unwrap();
         if let nodi::Event::Midi(midi_event) = ev {
             let mut message = Vec::with_capacity(4);
             let _ = midi_event.write(&mut message);
@@ -120,25 +120,26 @@ fn play_note(score_note: (Duration, TrackEventKind), connection: &mut MidiOutput
 fn play_next(
     conn_out: &mut MidiOutputConnection,
     input_score: &[ScoreNote],
-    score: &[(Duration, TrackEventKind)],
+    score: &[ScoreEvent],
     head: usize, // index of next score note to be played
     prev_match: Match,
     prev_system_time: SystemTime,
-    prev_stretch_factor: f32,
+    now: SystemTime,
 ) -> (usize, Duration) {
     if head >= score.len() {
         return (head, Duration::from_secs(1));
     }
     let prev_match_time = input_score[prev_match.score_index].time;
-    let wall_time_since_prev_match = SystemTime::now().duration_since(prev_system_time).unwrap();
+    let wall_time_since_prev_match = now.duration_since(prev_system_time).unwrap();
     let score_time_since_prev_match =
-        (1000.0 * prev_stretch_factor) as u32 * wall_time_since_prev_match / 1000;
+        (1000.0 * prev_match.stretch_factor) as u32 * wall_time_since_prev_match / 1000;
     let score_now = prev_match_time + score_time_since_prev_match;
-    let timestamp = score[head].0;
+    let timestamp = score[head].time;
     let mut head = head;
     if timestamp <= score_now {
-        while head < score.len() && score[head].0 == timestamp {
-            play_note(score[head], conn_out);
+        let score_event = &score[head];
+        while head < score.len() && score_event.time == timestamp {
+            play_note(score_event, conn_out);
             head += 1;
         }
     }
@@ -147,7 +148,7 @@ fn play_next(
     }
     (
         head,
-        (score_now - score[head].0).min(Duration::from_millis(1)),
+        (score_now - score[head].time).min(Duration::from_millis(1)),
     )
 }
 
@@ -156,6 +157,8 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
         Some(Match {
             score_index,
             live_index: _,
+            stretch_factor: _,
+            live_time: _,
         }) => score_index + 1,
         _ => 0,
     };
@@ -172,19 +175,12 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
     stdout().flush().unwrap();
 }
 
-fn print_got(
-    live: &[ScoreNote],
-    note: ScoreNote,
-    stretch_factor: f32,
-    new_matches: &[Match],
-    ignored: &[usize],
-) {
+fn print_got(live: &[ScoreNote], note: ScoreNote, new_matches: &[Match], ignored: &[usize]) {
     println!(
-        ", got {} at live {:>3} {:>7.3} -> {:>5.1}% {:?} {:?}",
+        ", got {} at live {:>3} {:>7.3} -> {:?} {:?}",
         pitch_to_name(note.pitch),
         live.len() - 1,
         note.time.as_secs_f32(),
-        100.0 * stretch_factor,
         new_matches
             .iter()
             .map(|m| {
