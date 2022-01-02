@@ -158,7 +158,6 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
             score_index,
             live_index: _,
             stretch_factor: _,
-            live_time: _,
         }) => score_index + 1,
         _ => 0,
     };

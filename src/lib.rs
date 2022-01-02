@@ -12,21 +12,14 @@ pub struct Match {
     pub score_index: usize,
     pub live_index: usize,
     pub stretch_factor: f32,
-    pub live_time: Duration,
 }
 
 impl Match {
-    pub fn new(
-        score_index: usize,
-        live_index: usize,
-        stretch_factor: f32,
-        live_time: Duration,
-    ) -> Self {
+    pub fn new(score_index: usize, live_index: usize, stretch_factor: f32) -> Self {
         Self {
             score_index,
             live_index,
             stretch_factor,
-            live_time,
         }
     }
 }
@@ -60,7 +53,7 @@ fn find_new_matches(
     live: &[ScoreNote],
     prev_match: Option<Match>,
     new_live_index: usize,
-    live_time: Duration,
+    _live_time: Duration,
 ) -> (Vec<Match>, Vec<usize>) {
     let mut score_pointer = match prev_match {
         Some(i) => i.score_index + 1, // continue in the score just after last previous match, or
@@ -74,9 +67,14 @@ fn find_new_matches(
         match matching_index {
             Some(score_index) => {
                 eprintln!("prev {:?} live {:?}", prev_match, live_note);
-                let stretch_factor =
-                    get_stretch_factor_at_match(score, prev_match, score_index, live_note.time);
-                let new_match = Match::new(score_index, live_index, stretch_factor, live_time);
+                let stretch_factor = get_stretch_factor_at_match(
+                    score,
+                    live,
+                    prev_match,
+                    score_index,
+                    live_note.time,
+                );
+                let new_match = Match::new(score_index, live_index, stretch_factor);
                 matches.push(new_match);
                 score_pointer = score_index + 1;
                 prev_match = Some(new_match);
@@ -89,6 +87,7 @@ fn find_new_matches(
 
 fn get_stretch_factor_at_match(
     score: &[ScoreNote],
+    live: &[ScoreNote],
     prev_match: Option<Match>,
     next_match_score_index: usize,
     next_match_live_time: Duration,
@@ -96,12 +95,11 @@ fn get_stretch_factor_at_match(
     match prev_match {
         Some(Match {
             score_index: prev_match_score_index,
-            live_index: _,
+            live_index,
             stretch_factor: _,
-            live_time: prev_match_live_time,
         }) => get_stretch_factor(
             score[next_match_score_index].time - score[prev_match_score_index].time,
-            next_match_live_time - prev_match_live_time,
+            next_match_live_time - live[live_index].time,
         ),
         None => 1.0,
     }
@@ -197,7 +195,7 @@ mod tests {
         let score = notes![(1000, 60)];
         let live = notes![(5, 60)];
         let (new_matches, ignored) = follow_score(&score, &live, None, 0, live_time());
-        assert_eq!(new_matches, [Match::new(0, 0, 1.0, live_time())]);
+        assert_eq!(new_matches, [Match::new(0, 0, 1.0)]);
         assert!(ignored.is_empty());
     }
 
@@ -205,7 +203,7 @@ mod tests {
     fn match_first() {
         let live = notes![(5, 60)];
         let (new_matches, ignored) = follow_score(&*TEST_SCORE, &live, None, 0, live_time());
-        assert_eq!(new_matches, [Match::new(0, 0, 1.0, live_time())]);
+        assert_eq!(new_matches, [Match::new(0, 0, 1.0)]);
         assert!(ignored.is_empty());
     }
 
@@ -215,11 +213,11 @@ mod tests {
         let (new_matches, ignored) = follow_score(
             &*TEST_SCORE,
             &live,
-            Some(Match::new(0, 0, 1.0, Duration::from_millis(5))),
+            Some(Match::new(0, 0, 1.0)),
             1,
             live_time(),
         );
-        assert_eq!(new_matches, [Match::new(1, 1, 0.5, live_time())]);
+        assert_eq!(new_matches, [Match::new(1, 1, 0.5)]);
         assert!(ignored.is_empty());
     }
 
@@ -229,11 +227,11 @@ mod tests {
         let (new_matches, ignored) = follow_score(
             &*TEST_SCORE,
             &live,
-            Some(Match::new(0, 0, 1.0, Duration::from_millis(5))),
+            Some(Match::new(0, 0, 1.0)),
             1,
             live_time(),
         );
-        assert_eq!(new_matches, [Match::new(1, 2, 0.5, live_time())]);
+        assert_eq!(new_matches, [Match::new(1, 2, 0.5)]);
         assert_eq!(ignored, vec![1]);
     }
 
@@ -243,11 +241,11 @@ mod tests {
         let (new_matches, ignored) = follow_score(
             &*TEST_SCORE,
             &live,
-            Some(Match::new(0, 0, 1.0, Duration::from_millis(5))),
+            Some(Match::new(0, 0, 1.0)),
             1,
             live_time(),
         );
-        assert_eq!(new_matches, [Match::new(2, 1, 0.25, live_time())]);
+        assert_eq!(new_matches, [Match::new(2, 1, 0.25)]);
         assert!(ignored.is_empty());
     }
 
@@ -257,7 +255,7 @@ mod tests {
         let (new_matches, ignored) = follow_score(
             &*TEST_SCORE,
             &live,
-            Some(Match::new(0, 0, 1.0, Duration::new(1, 0))),
+            Some(Match::new(0, 0, 1.0)),
             1,
             live_time(),
         );
