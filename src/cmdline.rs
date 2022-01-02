@@ -31,7 +31,7 @@ pub struct Cli {
     pub play_device_name: Option<String>,
     #[structopt(short = "i", long = "--input-score-file", parse(from_os_str))]
     pub input_score_file: PathBuf,
-    #[structopt(short = "p", long = "--playback-score-file", parse(from_os_str))]
+    #[structopt(short = "o", long = "--playback-score-file", parse(from_os_str))]
     pub playback_score_file: PathBuf,
 }
 
