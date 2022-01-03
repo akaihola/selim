@@ -66,7 +66,6 @@ fn find_new_matches(
         let matching_index = find_next_match_starting_at(score, score_pointer, live_note.pitch);
         match matching_index {
             Some(score_index) => {
-                eprintln!("prev {:?} live {:?}", prev_match, live_note);
                 let stretch_factor = get_stretch_factor_at_match(
                     score,
                     live,

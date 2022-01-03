@@ -1,38 +1,116 @@
-use midir::MidiIO;
+use crate::score::ScoreNote;
+use midir::{ConnectError, Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+use std::{
+    any::TypeId,
+    error::Error,
+    fmt::Display,
+    sync::mpsc::{self, Receiver, Sender},
+};
 
 pub enum DeviceSelector {
     Number(usize),
     NameSubstring(String),
 }
 
-pub fn find_port<T>(midi_io: &T, device: DeviceSelector) -> Result<T::Port, &'static str>
+impl Display for DeviceSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeviceSelector::Number(n) => f.write_fmt(format_args!("{}", n)),
+            DeviceSelector::NameSubstring(data) => f.write_fmt(format_args!("\"{}\"", data)),
+        }
+    }
+}
+
+fn get_midi_io_direction<T>(_midi_io: &T) -> &'static str
 where
-    T: MidiIO,
+    T: MidiIO + 'static,
 {
-    // Get an input port (read from console if multiple are available)
+    if TypeId::of::<T>() == TypeId::of::<MidiInput>() {
+        "input"
+    } else {
+        "output"
+    }
+}
+
+pub fn find_port<T>(midi_io: &T, device: DeviceSelector) -> Result<T::Port, String>
+where
+    T: MidiIO + 'static,
+{
     let ports = midi_io.ports();
     let numbered_port_names = ports
         .iter()
         .map(|p| midi_io.port_name(p).unwrap())
         .enumerate();
 
-    let matches_iter = numbered_port_names.filter(|(i, name)| match &device {
-        DeviceSelector::NameSubstring(name_substring) => name.contains(name_substring),
-        DeviceSelector::Number(number) => i == number,
-    });
-    let matches = matches_iter.collect::<Vec<(usize, String)>>();
+    let matches = numbered_port_names
+        .filter(|(i, name)| match &device {
+            DeviceSelector::NameSubstring(name_substring) => name.contains(name_substring),
+            DeviceSelector::Number(number) => i == number,
+        })
+        .collect::<Vec<(usize, String)>>();
+    let direction = get_midi_io_direction(midi_io);
     if matches.is_empty() {
-        return Err("No matching devices");
+        print_ports(ports, midi_io, direction);
+        return Err(format!("No MIDI {} port matching {}", direction, device));
     } else if matches.len() > 1 {
-        return Err("Multiple matching devices");
+        print_ports(ports, midi_io, direction);
+        return Err(format!(
+            "Multiple MIDI {} ports matching {}",
+            direction, device
+        ));
     };
 
-    let (device_number, in_port_name) = matches[0].clone();
+    let (device_number, port_name) = matches[0].clone();
     eprintln!(
-        "Selecting MIDI input port {} {}",
-        device_number, in_port_name
+        "Selecting MIDI {} port {}: {}",
+        direction, device_number, port_name
     );
     Ok(ports[device_number].clone())
+}
+
+fn print_ports<T>(ports: Vec<<T as MidiIO>::Port>, midi_io: &T, direction: &str)
+where
+    T: MidiIO,
+{
+    eprintln!("Found {} ports:", direction);
+    for (i, port) in ports.iter().enumerate() {
+        eprintln!("{}: {}", i, midi_io.port_name(port).unwrap())
+    }
+}
+
+pub struct MInput {
+    _connection: MidiInputConnection<Sender<ScoreNote>>,
+    pub rx: Receiver<ScoreNote>,
+}
+
+pub fn open_midi_input<F>(
+    device: DeviceSelector,
+    callback: F,
+) -> Result<MInput, Box<dyn Error>>
+where
+    F: Fn(u64, &[u8], &mut Sender<ScoreNote>) + std::marker::Send + 'static,
+{
+    let mut midi_input = MidiInput::new("selim")?;
+    midi_input.ignore(Ignore::All);
+    let in_port = find_port(&midi_input, device)?;
+    let in_port_name = midi_input.port_name(&in_port)?;
+    let (tx, rx) = mpsc::channel::<ScoreNote>();
+    // _conn needs to be a named parameter, because it needs to be kept alive
+    // until the end of the scope
+    let _connection = midi_input
+        .connect(&in_port, "selim-live-to-score", callback, tx)?;
+    eprintln!(
+        "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
+        in_port_name
+    );
+    Ok(MInput { _connection, rx })
+}
+
+pub fn open_midi_output(device: DeviceSelector) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+    let midi_output = MidiOutput::new("selim").unwrap();
+    let out_port = find_port(&midi_output, device).unwrap();
+    midi_output
+        .connect(&out_port, "selim-live-to-score")
 }
 
 #[cfg(test)]

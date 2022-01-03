@@ -1,16 +1,15 @@
-use midir::{Ignore, MidiInput, MidiOutput, MidiOutputConnection};
+use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::num::u4;
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
 use selim::cmdline::parse_args;
-use selim::device::{find_port, DeviceSelector};
+use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
 use selim::score::{load_midi_file, load_raw_midi_file, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
 use std::error::Error;
-use std::io::{stdout, Write};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
 
 fn main() {
@@ -46,23 +45,8 @@ fn run(
 ) -> Result<(), Box<dyn Error>> {
     assert!(!input_score.is_empty());
 
-    let mut midi_input = MidiInput::new("selim")?;
-    midi_input.ignore(Ignore::All);
-    let in_port = find_port(&midi_input, device).unwrap();
-    let in_port_name = midi_input.port_name(&in_port);
-    let (tx, rx) = mpsc::channel::<ScoreNote>();
-    // _conn_in needs to be a named parameter, because it needs to be kept alive
-    // until the end of the scope
-    let _conn_in = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
-
-    let midi_output = MidiOutput::new("selim")?;
-    let out_port = find_port(&midi_output, playback_device).unwrap();
-    let mut conn_out = midi_output.connect(&out_port, "selim-live-to-score")?;
-
-    eprintln!(
-        "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
-        in_port_name.unwrap()
-    );
+    let midi_input = open_midi_input(device, callback)?;
+    let mut conn_out = open_midi_output(playback_device)?;
 
     let mut live = vec![];
     let mut prev_match = None;
@@ -85,7 +69,7 @@ fn run(
             );
             playback_head = _new_playback_head;
         }
-        let note = rx.recv().unwrap();
+        let note = midi_input.rx.recv()?;
         let live_time = match live_start_time {
             None => {
                 live_start_time = Some(SystemTime::now());
@@ -162,24 +146,21 @@ fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
         _ => 0,
     };
     if score_next < input_score.len() {
-        print!(
+        println!(
             "score {:>3} {:>7.3} expect {}",
             score_next,
             input_score[score_next].time.as_secs_f32(),
             pitch_to_name(input_score[score_next].pitch),
         );
-    } else {
-        print!("score ended, expect nothing more");
     }
-    stdout().flush().unwrap();
 }
 
 fn print_got(live: &[ScoreNote], note: ScoreNote, new_matches: &[Match], ignored: &[usize]) {
     println!(
-        ", got {} at live {:>3} {:>7.3} -> {:?} {:?}",
-        pitch_to_name(note.pitch),
+        " live {:>3} {:>7.3}    got {} -> {:?} {:?}",
         live.len() - 1,
         note.time.as_secs_f32(),
+        pitch_to_name(note.pitch),
         new_matches
             .iter()
             .map(|m| {
