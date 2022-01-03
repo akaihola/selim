@@ -88,13 +88,12 @@ where
     let in_port = find_port(&midi_input, device)?;
     let in_port_name = midi_input.port_name(&in_port)?;
     let (tx, rx) = unbounded::<ScoreNote>();
-    // _conn needs to be a named parameter, because it needs to be kept alive
-    // until the end of the scope
     let _connection = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
     eprintln!(
         "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
         in_port_name
     );
+    // `_connection` needs to be returned, because it needs to be kept alive for `rx` to work
     Ok(MInput { _connection, rx })
 }
 

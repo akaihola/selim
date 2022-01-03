@@ -49,7 +49,6 @@ fn run(
     let mut conn_out = open_midi_output(playback_device)?;
 
     let mut live = vec![];
-    let mut prev_match = None;
     let mut new_live_index = 0;
     let mut matches = vec![];
     let mut playback_head = 0;
@@ -57,15 +56,17 @@ fn run(
     let mut system_time_at_last_match = None;
     let mut score_wait = Duration::from_secs(1);
     loop {
-        print_expect(&input_score, prev_match);
-        if let (Some(p), Some(s)) = (prev_match, system_time_at_last_match) {
+        print_expect(&input_score, matches.last());
+        if let (Some(prev_match), Some(prev_system_time)) =
+            (matches.last(), system_time_at_last_match)
+        {
             let (_new_playback_head, _score_wait) = play_next(
                 &mut conn_out,
                 &input_score,
                 &playback_score,
                 playback_head,
-                p,
-                s,
+                *prev_match,
+                prev_system_time,
                 SystemTime::now(),
             );
             playback_head = _new_playback_head;
@@ -84,14 +85,13 @@ fn run(
                 };
                 live.push(note.unwrap());
                 let (new_matches, ignored) =
-                    follow_score(&input_score, &live, prev_match, new_live_index, live_time);
+                    follow_score(&input_score, &live, matches.last().cloned(), new_live_index, live_time);
                 if !new_matches.is_empty() {
                     system_time_at_last_match = Some(SystemTime::now());
                 }
                 print_got(&live, note.unwrap(), &new_matches, &ignored);
                 matches.extend(new_matches.iter());
                 new_live_index = live.len();
-                prev_match = matches.last().cloned();
             },
             recv(after(score_wait)) -> _ => {}
         };
@@ -186,7 +186,7 @@ fn play_next(
     (head, wait)
 }
 
-fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
+fn print_expect(input_score: &[ScoreNote], prev_match: Option<&Match>) {
     let score_next = match prev_match {
         Some(Match {
             score_index,
