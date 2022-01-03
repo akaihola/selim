@@ -1,6 +1,6 @@
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
-use midly::num::u4;
+use midly::num::{u4, u7};
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
 use selim::cmdline::parse_args;
@@ -10,7 +10,7 @@ use selim::{follow_score, Match};
 use std::boxed::Box;
 use std::error::Error;
 use std::sync::mpsc::Sender;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn main() {
     let (args, device, playback_device) = parse_args();
@@ -68,6 +68,8 @@ fn run(
                 SystemTime::now(),
             );
             playback_head = _new_playback_head;
+        } else {
+            println!("no new notes to play")
         }
         let note = midi_input.rx.recv()?;
         let live_time = match live_start_time {
@@ -120,20 +122,53 @@ fn play_next(
     let score_now = prev_match_time + score_time_since_prev_match;
     let timestamp = score[head].time;
     let mut head = head;
+    println!(
+        "Now {:>7.3}, {:.3}s since previous match at {:.3}s. Score can play up to {:.3}s until {:.3}s at {:3.0}% speed. Next {:.3}s.",
+        now.duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f32()),
+        wall_time_since_prev_match.as_secs_f32(),
+        prev_match_time.as_secs_f32(),
+        score_time_since_prev_match.as_secs_f32(),
+        score_now.as_secs_f32(),
+        100.0 * prev_match.stretch_factor,
+        timestamp.as_secs_f32(),
+    );
     if timestamp <= score_now {
-        let score_event = &score[head];
-        while head < score.len() && score_event.time == timestamp {
+        loop {
+            if head >= score.len() {
+                break;
+            }
+            let score_event = &score[head];
+            if score_event.time > timestamp {
+                break;
+            }
+            if let TrackEventKind::Midi {
+                channel: _,
+                message: NoteOn { key, vel: _ },
+            } = score_event.message
+            {
+                println!(
+                    "Play score {}: {:>7.3}, {}",
+                    head,
+                    score_event.time.as_secs_f32(),
+                    pitch_to_name(key)
+                );
+            }
             play_note(score_event, conn_out);
             head += 1;
         }
     }
-    if head >= score.len() {
-        return (head, Duration::from_secs(1));
-    }
-    (
-        head,
-        (score_now - score[head].time).min(Duration::from_millis(1)),
-    )
+    let wait = if head >= score.len() {
+        Duration::from_secs(1)
+    } else {
+        println!(
+            "Score @{} {:>7.3}s should be ahead of {:>7.3}s",
+            head,
+            score[head].time.as_secs_f32(),
+            timestamp.as_secs_f32()
+        );
+        (score[head].time - timestamp).min(Duration::from_millis(1)) // time to wait for next event
+    };
+    (head, wait)
 }
 
 fn print_expect(input_score: &[ScoreNote], prev_match: Option<Match>) {
