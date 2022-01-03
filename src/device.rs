@@ -1,8 +1,6 @@
 use crate::score::ScoreNote;
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use midir::{
-    ConnectError, Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection,
-};
+use midir::{Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 use std::{any::TypeId, error::Error, fmt::Display};
 
 pub enum DeviceSelector {
@@ -100,12 +98,11 @@ where
     Ok(MInput { _connection, rx })
 }
 
-pub fn open_midi_output(
-    device: DeviceSelector,
-) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
-    let midi_output = MidiOutput::new("selim").unwrap();
-    let out_port = find_port(&midi_output, device).unwrap();
-    midi_output.connect(&out_port, "selim-live-to-score")
+pub fn open_midi_output(device: DeviceSelector) -> Result<MidiOutputConnection, Box<dyn Error>> {
+    let midi_output = MidiOutput::new("selim")?;
+    let out_port = find_port(&midi_output, device)?;
+    let connection = midi_output.connect(&out_port, "selim-live-to-score")?;
+    Ok(connection)
 }
 
 #[cfg(test)]
