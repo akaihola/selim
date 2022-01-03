@@ -1,11 +1,9 @@
 use crate::score::ScoreNote;
-use midir::{ConnectError, Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
-use std::{
-    any::TypeId,
-    error::Error,
-    fmt::Display,
-    sync::mpsc::{self, Receiver, Sender},
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use midir::{
+    ConnectError, Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection,
 };
+use std::{any::TypeId, error::Error, fmt::Display};
 
 pub enum DeviceSelector {
     Number(usize),
@@ -83,10 +81,7 @@ pub struct MInput {
     pub rx: Receiver<ScoreNote>,
 }
 
-pub fn open_midi_input<F>(
-    device: DeviceSelector,
-    callback: F,
-) -> Result<MInput, Box<dyn Error>>
+pub fn open_midi_input<F>(device: DeviceSelector, callback: F) -> Result<MInput, Box<dyn Error>>
 where
     F: Fn(u64, &[u8], &mut Sender<ScoreNote>) + std::marker::Send + 'static,
 {
@@ -94,11 +89,10 @@ where
     midi_input.ignore(Ignore::All);
     let in_port = find_port(&midi_input, device)?;
     let in_port_name = midi_input.port_name(&in_port)?;
-    let (tx, rx) = mpsc::channel::<ScoreNote>();
+    let (tx, rx) = unbounded::<ScoreNote>();
     // _conn needs to be a named parameter, because it needs to be kept alive
     // until the end of the scope
-    let _connection = midi_input
-        .connect(&in_port, "selim-live-to-score", callback, tx)?;
+    let _connection = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
     eprintln!(
         "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
         in_port_name
@@ -106,11 +100,12 @@ where
     Ok(MInput { _connection, rx })
 }
 
-pub fn open_midi_output(device: DeviceSelector) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
+pub fn open_midi_output(
+    device: DeviceSelector,
+) -> Result<MidiOutputConnection, ConnectError<MidiOutput>> {
     let midi_output = MidiOutput::new("selim").unwrap();
     let out_port = find_port(&midi_output, device).unwrap();
-    midi_output
-        .connect(&out_port, "selim-live-to-score")
+    midi_output.connect(&out_port, "selim-live-to-score")
 }
 
 #[cfg(test)]
