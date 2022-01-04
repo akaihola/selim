@@ -129,6 +129,30 @@ mod tests {
     }
 
     #[test]
+    fn format_device_selector_number() {
+        let result = format!("{}", DeviceSelector::Number(42));
+        assert_eq!(result, "42");
+    }
+
+    #[test]
+    fn format_device_selector_name_substring() {
+        let result = format!("{}", DeviceSelector::NameSubstring(" foo ".to_string()));
+        assert_eq!(result, "\" foo \"");
+    }
+
+    #[test]
+    fn get_midi_io_direction_input() {
+        let result = get_midi_io_direction(&MidiInput::new("client_name").unwrap());
+        assert_eq!(result, "input");
+    }
+
+    #[test]
+    fn get_midi_io_direction_output() {
+        let result = get_midi_io_direction(&MidiOutput::new("client_name").unwrap());
+        assert_eq!(result, "output");
+    }
+
+    #[test]
     fn find_port_by_substring() {
         let midi_io = MockMidiIo {};
         let device = DeviceSelector::NameSubstring(" one ".to_string());
