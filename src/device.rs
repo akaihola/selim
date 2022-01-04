@@ -141,7 +141,10 @@ mod tests {
         let midi_io = MockMidiIo {};
         let device = DeviceSelector::NameSubstring(" zero ".to_string());
         let port = find_port(&midi_io, device);
-        assert_eq!(port.err().unwrap(), "No matching devices");
+        assert_eq!(
+            port.err().unwrap(),
+            "No MIDI output port matching \" zero \""
+        );
     }
 
     #[test]
@@ -149,7 +152,10 @@ mod tests {
         let midi_io = MockMidiIo {};
         let device = DeviceSelector::NameSubstring("port ".to_string());
         let port = find_port(&midi_io, device);
-        assert_eq!(port.err().unwrap(), "Multiple matching devices");
+        assert_eq!(
+            port.err().unwrap(),
+            "Multiple MIDI output ports matching \"port \""
+        );
     }
 
     #[test]
