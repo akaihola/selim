@@ -116,7 +116,7 @@ fn play_midi_event(
 }
 
 fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
-    1000 * duration / (1000.0 * stretch_factor) as u32
+    duration * (1000.0 * stretch_factor) as u32 / 1000
 }
 
 fn play_next(
