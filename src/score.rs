@@ -5,7 +5,7 @@ use midly::{
     TrackEventKind::{self, Midi},
 };
 use once_cell::sync::Lazy;
-use std::{path::Path, time::Duration};
+use std::{path::Path, str::FromStr, time::Duration};
 
 /// A note with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -19,6 +19,43 @@ pub struct ScoreEvent<'a> {
     pub message: TrackEventKind<'a>,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Channels {
+    pub track: usize,
+    pub midi_channels: Vec<u4>,
+}
+
+type ChannelsParseError = String;
+
+impl FromStr for Channels {
+    type Err = ChannelsParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.rsplitn(2, ':');
+        let midi_channels: Result<Vec<u4>, _> = match parts.next() {
+            Some(m) => {
+                m.split(',')
+                    .map(|c| match c.trim().parse::<u8>() {
+                        Ok(n) => u4::try_from(n - 1)
+                            .ok_or(format!("Invalid MIDI channel number '{}'", c)),
+                        Err(_) => Err(format!("Invalid MIDI channel number '{}'", c)),
+                    })
+                    .collect()
+            }
+            None => return Err(format!("Can't parse MIDI channels list from '{}'", s)),
+        };
+        let track: Result<usize, _> = match parts.next().map(|p| (p, p.trim().parse::<usize>())) {
+            Some((_, Ok(0))) => Err(String::from("Invalid track number '0'")),
+            Some((p, t)) => t.map_err(|_| format!("Invalid track number '{}'", p)),
+            None => Ok(1),
+        };
+        Ok(Channels {
+            track: track? - 1,
+            midi_channels: midi_channels?,
+        })
+    }
+}
+
 #[cfg(test)]
 macro_rules! notes {
     (
@@ -28,25 +65,17 @@ macro_rules! notes {
     }
 }
 
-// static TEST_SCORE: Lazy<[ScoreNote; 3]> = Lazy::new(|| {
+static ALL_CHANNELS: Lazy<Vec<u4>> = Lazy::new(|| (0..16).map(u4::from).collect::<Vec<_>>());
 
-static ALL_CHANNELS: Lazy<[u4; 16]> = Lazy::new(|| {
-    (0..16)
-        .map(u4::from)
-        .collect::<Vec<_>>()
-        .try_into()
-        .expect("wrong size iterator")
-});
-
-fn make_tracks_and_channels_index<'a>(
-    include_tracks_with_channels: &'a [(usize, &[u4])],
+fn make_tracks_and_channels_index(
+    include_tracks_with_channels: Vec<Channels>,
     tracks_available: usize,
-) -> Vec<&'a [u4]> {
-    let mut track_channels: Vec<&[u4]> = vec![&*ALL_CHANNELS; tracks_available];
+) -> Vec<Vec<u4>> {
+    let mut track_channels: Vec<Vec<u4>> = vec![ALL_CHANNELS.clone(); tracks_available];
     if !include_tracks_with_channels.is_empty() {
         let highest_track = include_tracks_with_channels
             .iter()
-            .map(|(track_index, _)| *track_index)
+            .map(|channels| channels.track)
             .max()
             .unwrap();
         if highest_track >= track_channels.len() {
@@ -56,15 +85,15 @@ fn make_tracks_and_channels_index<'a>(
                 highest_track + 1
             );
         }
-        track_channels.fill(&[]);
-        for (track_num, channel_nums) in include_tracks_with_channels {
-            track_channels[*track_num] = channel_nums;
+        track_channels.fill(vec![]);
+        for channels in include_tracks_with_channels {
+            track_channels[channels.track] = channels.midi_channels;
         }
     }
     track_channels
 }
 
-pub fn load_midi_file<'a>(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreEvent<'a>> {
+pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEvent<'a>> {
     let data = std::fs::read(path).unwrap();
     let smf = midly::Smf::parse(&data).unwrap();
     let mut ticks_to_microseconds = ConvertTicksToMicroseconds::try_from(smf.header).unwrap();
@@ -91,7 +120,7 @@ pub fn load_midi_file<'a>(path: &Path, channels: &[(usize, &[u4])]) -> Vec<Score
         .collect()
 }
 
-pub fn load_midi_file_note_ons(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
+pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<ScoreNote> {
     let raw = load_midi_file(path, channels);
     raw.iter()
         .filter_map(|ScoreEvent { time, message }| match message {
@@ -144,10 +173,44 @@ mod tests {
     use rstest::rstest;
     use std::path::Path;
 
+    macro_rules! chnls {
+        (
+            $t: expr, $c: expr
+        ) => {
+            Channels {
+                track: $t,
+                midi_channels: $c.into_iter().map(u4::from).collect(),
+            }
+        };
+    }
+
+    #[rstest(
+        case::empty("", Err(String::from("Invalid MIDI channel number ''"))),
+        case::empty_channels("1:", Err(String::from("Invalid MIDI channel number ''"))),
+        case::empty_track(":1", Err(String::from("Invalid track number ''"))),
+        case::implicit_track1_ch16("16", Ok(chnls!(0, vec![15]))),
+        case::implicit_track1_ch2_3("2,3", Ok(chnls!(0, vec![1, 2]))),
+        case::track1_ch2_3("1:2,3", Ok(chnls!(0, vec![1, 2]))),
+        case::track16_ch_all("16:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16", Ok(chnls!(15, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]))),
+        case::track0("0:1", Err(String::from("Invalid track number '0'"))),
+        case::invalid_track("foo:1", Err(String::from("Invalid track number 'foo'"))),
+        case::invalid_channel("1:foo", Err(String::from("Invalid MIDI channel number 'foo'"))),
+        case::negative_track("-1:1", Err(String::from("Invalid track number '-1'"))),
+        case::negative_channel("1:-1", Err(String::from("Invalid MIDI channel number '-1'"))),
+        case::whitespace(" 7 : 1 , 15 ", Ok(chnls!(6, vec![0, 14]))),
+        case::channel17("1:17", Err(String::from("Invalid MIDI channel number '17'"))),
+    )]
+    fn channels_from_str(
+        #[case] channels: &str,
+        #[case] expect: Result<Channels, ChannelsParseError>,
+    ) {
+        assert_eq!(Channels::from_str(channels), expect);
+    }
+
     #[test]
     fn load_midi_file_clementi() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file_note_ons(&path, &[]);
+        let score = load_midi_file_note_ons(&path, vec![]);
         assert_eq!(score.len(), 1332);
         assert_eq!(
             score[..5],
@@ -158,7 +221,7 @@ mod tests {
     #[test]
     fn load_midi_file_clementi_track_1_channel_1() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(0)])]);
+        let score = load_midi_file_note_ons(&path, vec![chnls!(1, vec![0])]);
         assert_eq!(score.len(), 908);
         assert_eq!(
             score[..5],
@@ -169,14 +232,14 @@ mod tests {
     #[test]
     fn load_midi_file_clementi_track_1_channel_2() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(1)])]);
+        let score = load_midi_file_note_ons(&path, vec![chnls!(1, vec![1])]);
         assert_eq!(score.len(), 0);
     }
 
     #[test]
     fn load_midi_file_clementi_track_3_channel_2() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(2)])]);
+        let score = load_midi_file_note_ons(&path, vec![chnls!(1, vec![2])]);
         assert_eq!(score.len(), 0);
     }
 

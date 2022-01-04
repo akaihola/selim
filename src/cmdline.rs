@@ -1,5 +1,6 @@
-use crate::device::DeviceSelector;
+use crate::{device::DeviceSelector, score::Channels};
 use std::path::PathBuf;
+
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -31,6 +32,10 @@ pub struct Cli {
     pub play_device_name: Option<String>,
     #[structopt(short = "i", long = "--input-score-file", parse(from_os_str))]
     pub input_score_file: PathBuf,
+    #[structopt(short = "c", long = "--input-channels")]
+    pub input_channels: Vec<Channels>,
+    #[structopt(short = "C", long = "--output-channels")]
+    pub output_channels: Vec<Channels>,
     #[structopt(short = "o", long = "--playback-score-file", parse(from_os_str))]
     pub playback_score_file: PathBuf,
 }

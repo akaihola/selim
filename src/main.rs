@@ -1,7 +1,6 @@
 use crossbeam_channel::{after, select, Sender};
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
-use midly::num::u4;
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
 use selim::cmdline::parse_args;
@@ -14,8 +13,8 @@ use std::time::{Duration, SystemTime};
 
 fn main() {
     let (args, device, playback_device) = parse_args();
-    let input_score = load_midi_file_note_ons(&args.input_score_file, &[(1, &[u4::from(0)])]);
-    let playback_score = load_midi_file(&args.playback_score_file, &[(2, &[u4::from(1)])]);
+    let input_score = load_midi_file_note_ons(&args.input_score_file, args.input_channels);
+    let playback_score = load_midi_file(&args.playback_score_file, args.output_channels);
     assert!(!input_score.is_empty());
     if let Err(err) = run(device, playback_device, input_score, playback_score) {
         eprintln!("Error: {}", err)
