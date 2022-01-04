@@ -6,7 +6,7 @@ use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::score::{load_midi_file, load_raw_midi_file, pitch_to_name, ScoreEvent, ScoreNote};
+use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
 use std::error::Error;
@@ -14,8 +14,8 @@ use std::time::{Duration, SystemTime};
 
 fn main() {
     let (args, device, playback_device) = parse_args();
-    let input_score = load_midi_file(&args.input_score_file, &[(1, &[u4::from(0)])]);
-    let playback_score = load_raw_midi_file(&args.playback_score_file, &[(2, &[u4::from(1)])]);
+    let input_score = load_midi_file_note_ons(&args.input_score_file, &[(1, &[u4::from(0)])]);
+    let playback_score = load_midi_file(&args.playback_score_file, &[(2, &[u4::from(1)])]);
     assert!(!input_score.is_empty());
     if let Err(err) = run(device, playback_device, input_score, playback_score) {
         eprintln!("Error: {}", err)
@@ -23,7 +23,7 @@ fn main() {
 }
 
 fn callback(microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
-    let event = LiveEvent::parse(message).unwrap();
+    let event = LiveEvent::parse(message).expect("Unparseable MIDI message");
     if let Midi {
         channel: _,
         message: NoteOn { key, vel: _ },
@@ -33,19 +33,19 @@ fn callback(microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
             time: Duration::from_micros(microsecond),
             pitch: key,
         })
-        .unwrap();
+        .expect("Can't pass on a MIDI message in the internal channel");
     }
 }
 
 fn run(
-    device: DeviceSelector,
+    input_device: DeviceSelector,
     playback_device: DeviceSelector,
     input_score: Vec<ScoreNote>,
     playback_score: Vec<ScoreEvent>,
 ) -> Result<(), Box<dyn Error>> {
     assert!(!input_score.is_empty());
 
-    let midi_input = open_midi_input(device, callback)?;
+    let midi_input = open_midi_input(input_device, callback)?;
     let mut conn_out = open_midi_output(playback_device)?;
 
     let mut live = vec![];
@@ -68,14 +68,14 @@ fn run(
                 *prev_match,
                 prev_system_time,
                 SystemTime::now(),
-            );
+            )?;
             playback_head = _new_playback_head;
             score_wait = _score_wait;
         } else {
             println!("no new notes to play")
         }
         select! {
-            recv(midi_input.rx) -> note => {
+            recv(midi_input.rx) -> note_result => {
                 let live_time = match live_start_time {
                     None => {
                         live_start_time = Some(SystemTime::now());
@@ -83,14 +83,15 @@ fn run(
                     }
                     Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
                 };
-                live.push(note.unwrap());
+                let note = note_result?;
+                live.push(note);
                 let (new_matches, ignored) =
                     follow_score(&input_score, &live, matches.last().cloned(), new_live_index, live_time);
                 if !new_matches.is_empty() {
                     system_time_at_last_match = Some(SystemTime::now());
+                    matches.extend(new_matches.iter());
                 }
-                print_got(&live, note.unwrap(), &new_matches, &ignored);
-                matches.extend(new_matches.iter());
+                print_got(&live, note, &new_matches, &ignored);
                 new_live_index = live.len();
             },
             recv(after(score_wait)) -> _ => {}
@@ -98,15 +99,20 @@ fn run(
     }
 }
 
-fn play_note(score_note: &ScoreEvent, connection: &mut MidiOutputConnection) {
-    if let TrackEventKind::Midi { .. } = score_note.message {
-        let ev = nodi::Event::try_from(score_note.message).unwrap();
+fn play_midi_event(
+    event: &ScoreEvent,
+    conn_out: &mut MidiOutputConnection,
+) -> Result<Option<nodi::MidiEvent>, Box<dyn Error>> {
+    if let TrackEventKind::Midi { .. } = event.message {
+        let ev = nodi::Event::try_from(event.message)?;
         if let nodi::Event::Midi(midi_event) = ev {
             let mut message = Vec::with_capacity(4);
             let _ = midi_event.write(&mut message);
-            connection.send(&message).unwrap();
+            conn_out.send(&message)?;
+            return Ok(Some(midi_event));
         }
     }
+    Ok(None)
 }
 
 fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
@@ -121,9 +127,9 @@ fn play_next(
     prev_match: Match,
     prev_system_time: SystemTime,
     now: SystemTime,
-) -> (usize, Duration) {
+) -> Result<(usize, Duration), Box<dyn Error>> {
     if head >= score.len() {
-        return (head, Duration::from_secs(1));
+        return Ok((head, Duration::from_secs(1)));
     }
     let prev_match_time = input_score[prev_match.score_index].time;
     let wall_time_since_prev_match = now.duration_since(prev_system_time).unwrap();
@@ -133,14 +139,14 @@ fn play_next(
     let moment_to_play = score[head].time;
     let mut head = head;
     println!(
-        " play {:>3}, {:.3}s since previous match at {:.3}s. Score can play up to {:.3}s until {:.3}s at {:3.0}% speed. Next {:.3}s.",
+        " play {:>3} {:>7.3} next. Could play {:.3}s until {:.3}s at {:3.0}% speed. {:.3}s since previous match at {:.3}s.",
         head,
-        wall_time_since_prev_match.as_secs_f32(),
-        prev_match_time.as_secs_f32(),
+        moment_to_play.as_secs_f32(),
         score_time_since_prev_match.as_secs_f32(),
         score_calculated_moment.as_secs_f32(),
         100.0 * prev_match.stretch_factor,
-        moment_to_play.as_secs_f32(),
+        wall_time_since_prev_match.as_secs_f32(),
+        prev_match_time.as_secs_f32(),
     );
     if moment_to_play <= score_calculated_moment {
         loop {
@@ -153,17 +159,18 @@ fn play_next(
             }
             if let TrackEventKind::Midi {
                 channel: _,
-                message: NoteOn { key, vel: _ },
+                message: NoteOn { key, vel },
             } = score_event.message
             {
                 println!(
-                    "Play score {}: {:>7.3}, {}",
+                    "Play score {}: {:.3}, {} {}",
                     head,
                     score_event.time.as_secs_f32(),
-                    pitch_to_name(key)
+                    pitch_to_name(key),
+                    vel.as_int(),
                 );
             }
-            play_note(score_event, conn_out);
+            play_midi_event(score_event, conn_out)?;
             head += 1;
         }
     }
@@ -171,7 +178,7 @@ fn play_next(
         Duration::from_secs(1)
     } else {
         println!(
-            "Score @{} {:>7.3}s should be ahead of {:>7.3}s",
+            "Score @{} {:.3}s should be ahead of {:.3}s",
             head,
             score[head].time.as_secs_f32(),
             moment_to_play.as_secs_f32()
@@ -183,7 +190,7 @@ fn play_next(
             Duration::from_secs(1)
         }
     };
-    (head, wait)
+    Ok((head, wait))
 }
 
 fn print_expect(input_score: &[ScoreNote], prev_match: Option<&Match>) {

@@ -64,7 +64,7 @@ fn make_tracks_and_channels_index<'a>(
     track_channels
 }
 
-pub fn load_raw_midi_file<'a>(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreEvent<'a>> {
+pub fn load_midi_file<'a>(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreEvent<'a>> {
     let data = std::fs::read(path).unwrap();
     let smf = midly::Smf::parse(&data).unwrap();
     let mut ticks_to_microseconds = ConvertTicksToMicroseconds::try_from(smf.header).unwrap();
@@ -91,8 +91,8 @@ pub fn load_raw_midi_file<'a>(path: &Path, channels: &[(usize, &[u4])]) -> Vec<S
         .collect()
 }
 
-pub fn load_midi_file(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
-    let raw = load_raw_midi_file(path, channels);
+pub fn load_midi_file_note_ons(path: &Path, channels: &[(usize, &[u4])]) -> Vec<ScoreNote> {
+    let raw = load_midi_file(path, channels);
     raw.iter()
         .filter_map(|ScoreEvent { time, message }| match message {
             Midi {
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn load_midi_file_clementi() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file(&path, &[]);
+        let score = load_midi_file_note_ons(&path, &[]);
         assert_eq!(score.len(), 1332);
         assert_eq!(
             score[..5],
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn load_midi_file_clementi_track_1_channel_1() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file(&path, &[(1, &[u4::from(0)])]);
+        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(0)])]);
         assert_eq!(score.len(), 908);
         assert_eq!(
             score[..5],
@@ -169,14 +169,14 @@ mod tests {
     #[test]
     fn load_midi_file_clementi_track_1_channel_2() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file(&path, &[(1, &[u4::from(1)])]);
+        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(1)])]);
         assert_eq!(score.len(), 0);
     }
 
     #[test]
     fn load_midi_file_clementi_track_3_channel_2() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = load_midi_file(&path, &[(1, &[u4::from(2)])]);
+        let score = load_midi_file_note_ons(&path, &[(1, &[u4::from(2)])]);
         assert_eq!(score.len(), 0);
     }
 
