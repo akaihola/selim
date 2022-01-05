@@ -120,10 +120,16 @@ pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEven
         .collect()
 }
 
+const ZERO_U7: u7 = u7::new(0);
+
 pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<ScoreNote> {
     let raw = load_midi_file(path, channels);
     raw.iter()
         .filter_map(|ScoreEvent { time, message }| match message {
+            Midi {
+                channel: _,
+                message: NoteOn { key: _, vel: ZERO_U7 },
+            } => None,
             Midi {
                 channel: _,
                 message: NoteOn { key, vel: _ },
