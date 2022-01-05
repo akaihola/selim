@@ -6,6 +6,7 @@ use midly::TrackEventKind;
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
+use selim::playback::play_midi_event;
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
@@ -110,22 +111,6 @@ fn run(
             recv(after(score_wait)) -> _ => {}
         };
     }
-}
-
-fn play_midi_event(
-    event: &ScoreEvent,
-    conn_out: &mut MidiOutputConnection,
-) -> Result<Option<nodi::MidiEvent>, Box<dyn Error>> {
-    if let TrackEventKind::Midi { .. } = event.message {
-        let ev = nodi::Event::try_from(event.message)?;
-        if let nodi::Event::Midi(midi_event) = ev {
-            let mut message = Vec::with_capacity(4);
-            let _ = midi_event.write(&mut message);
-            conn_out.send(&message)?;
-            return Ok(Some(midi_event));
-        }
-    }
-    Ok(None)
 }
 
 fn stretch(duration: Duration, stretch_factor: f32) -> Duration {

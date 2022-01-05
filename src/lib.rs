@@ -7,6 +7,7 @@ pub mod cmdline;
 pub mod device;
 #[macro_use]
 pub mod score;
+pub mod playback;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Match {
