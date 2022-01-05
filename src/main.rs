@@ -2,11 +2,11 @@ use crossbeam_channel::{after, select, Sender};
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::MidiMessage::NoteOn;
-use midly::TrackEventKind;
+
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::playback::play_midi_event;
+use selim::playback::{play_next_moment};
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
@@ -134,44 +134,18 @@ fn play_next(
     let score_time_since_prev_match =
         stretch(wall_time_since_prev_match, prev_match.stretch_factor);
     let score_calculated_moment = prev_match_time + score_time_since_prev_match;
-    let moment_to_play = score[head].time;
-    let mut head = head;
+    let prev_moment = score[head].time;
     println!(
         " play {:>3} {:>7.3} next. Could play {:.3}s until {:.3}s at {:3.0}% speed. {:.3}s since previous match at {:.3}s.",
         head,
-        moment_to_play.as_secs_f32(),
+        prev_moment.as_secs_f32(),
         score_time_since_prev_match.as_secs_f32(),
         score_calculated_moment.as_secs_f32(),
         100.0 * prev_match.stretch_factor,
         wall_time_since_prev_match.as_secs_f32(),
         prev_match_time.as_secs_f32(),
     );
-    if moment_to_play <= score_calculated_moment {
-        loop {
-            if head >= score.len() {
-                break;
-            }
-            let score_event = &score[head];
-            if score_event.time > moment_to_play {
-                break;
-            }
-            if let TrackEventKind::Midi {
-                channel: _,
-                message: NoteOn { key, vel },
-            } = score_event.message
-            {
-                println!(
-                    "Play score {}: {:.3}, {} {}",
-                    head,
-                    score_event.time.as_secs_f32(),
-                    pitch_to_name(key),
-                    vel.as_int(),
-                );
-            }
-            play_midi_event(score_event, conn_out)?;
-            head += 1;
-        }
-    }
+    let head = play_next_moment(score, head, score_calculated_moment, conn_out)?;
     let wait = if head >= score.len() {
         Duration::from_secs(1)
     } else {
@@ -179,9 +153,9 @@ fn play_next(
             "Score @{} {:.3}s should be ahead of {:.3}s",
             head,
             score[head].time.as_secs_f32(),
-            moment_to_play.as_secs_f32()
+            prev_moment.as_secs_f32(),
         );
-        let time_to_catch = stretch(score[head].time - moment_to_play, prev_match.stretch_factor);
+        let time_to_catch = stretch(score[head].time - prev_moment, prev_match.stretch_factor);
         if time_to_catch > Duration::ZERO {
             time_to_catch.max(Duration::from_millis(10))
         } else {
