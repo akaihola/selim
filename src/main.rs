@@ -1,33 +1,21 @@
 use crossbeam_channel::{after, select, Sender};
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
-use midly::num::{u4, u7};
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
+use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
 use std::error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 fn main() {
-    // Attach interrupt handler to catch ctrl-c
-    let caught_ctrl_c = Arc::new(AtomicBool::new(false));
-    let caught_ctrl_c_clone_for_handler = caught_ctrl_c.clone();
-    ctrlc::set_handler(move || {
-        if caught_ctrl_c_clone_for_handler.load(Ordering::SeqCst) {
-            eprintln!("Multiple ctrl+c caught, force-exiting...");
-            std::process::exit(-1);
-        }
-        eprintln!("Caught interrupt signal, cleaning up...");
-        caught_ctrl_c_clone_for_handler.store(true, Ordering::SeqCst);
-    })
-    .expect("Unable to attach interrupt signal handler");
-
+    let caught_ctrl_c = attach_ctrl_c_handler();
     let (args, device, playback_device) = parse_args();
     let input_score = load_midi_file_note_ons(&args.input_score_file, args.input_channels);
     let playback_score = load_midi_file(&args.playback_score_file, args.output_channels);
@@ -78,22 +66,7 @@ fn run(
     let mut system_time_at_last_match = None;
     let mut score_wait = Duration::from_secs(1);
     loop {
-        if caught_ctrl_c.load(Ordering::SeqCst) {
-            let cc = midly::MidiMessage::Controller {
-                controller: u7::from(120),
-                value: u7::from(0),
-            };
-            for channel in 0..16 {
-                let ev = LiveEvent::Midi {
-                    channel: u4::from(channel),
-                    message: cc,
-                };
-                let mut buf = Vec::new();
-                ev.write(&mut buf)
-                    .expect("Can't create All Sound Off MIDI event");
-                conn_out.send(&buf)?;
-            }
-            println!("received Ctrl+C!");
+        if handle_ctrl_c(&caught_ctrl_c, &mut conn_out) {
             return Ok(());
         }
         print_expect(&input_score, matches.last());

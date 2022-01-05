@@ -2,6 +2,7 @@ use crate::score::ScoreNote;
 use midly::num::u7;
 use std::time::Duration;
 
+pub mod cleanup;
 pub mod cmdline;
 pub mod device;
 #[macro_use]
