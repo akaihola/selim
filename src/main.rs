@@ -129,62 +129,33 @@ fn play_next(
     // - t = wall time now
     // - t_prev = wall time of PREV
     // - ts_prev = score time of PREV
-    // - v = stretch factor at PREV
+    // - k = stretch factor at PREV
     // - dt = elapsed wall time since PREV
     // - dts = estimated score elapsed time since PREV
-    // - ts_next = score time of next upcoming playback note
     // - ts = estimated score time now
-    // - t_next = estimated wall time of next upcoming playback note
+    // - ts_next = score time of next upcoming playback note
+    // - dt_next = estimated wait time until next upcoming playback note
     let prev_match = matches
         .last()
         .expect("play_next() needs a non-empty list of matches");
     let t_prev = live[prev_match.live_index].time;
     let ts_prev = expect_score[prev_match.score_index].time;
-    let v = prev_match.stretch_factor;
+    let k = prev_match.stretch_factor;
     let dt = t - t_prev;
-    let dts = stretch(dt, 1.0 / v);
-    let ts_next = playback_score[head].time;
+    let dts = stretch(dt, 1.0 / k);
     let ts = ts_prev + dts;
-    println!(
-        "  now = {:.3}, last match = {:.3}",
-        t.as_secs_f32(),
-        t_prev.as_secs_f32()
-    );
-    println!(
-        " play {:>3} {:>7.3} next. Could play {:.3}s until {:.3}s at {:3.0}% speed. {:.3}s since previous match at {:.3}s.",
-        head,
-        ts_next.as_secs_f32(),
-        dts.as_secs_f32(),
-        ts.as_secs_f32(),
-        100.0 * prev_match.stretch_factor,
-        dt.as_secs_f32(),
-        ts_prev.as_secs_f32(),
-    );
     let new_head = play_past_moments(playback_score, head, ts, conn_out)?;
     let dt_next = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
         let ts_next = playback_score[new_head].time;
-        println!(
-            "dts_next = ts_next:{:.3}s - ts:{:.3}s",
-            ts_next.as_secs_f32(),
-            ts.as_secs_f32()
-        );
         if ts_next < ts {
             Duration::from_millis(10)
         } else {
             let dts_next = ts_next - ts;
-            stretch(dts_next, v)
+            stretch(dts_next, k)
         }
     };
-    println!(
-        "Score @{} waiting between {:.3}s and {:.3}s for {:.3}s, stretched {:.0}%.",
-        new_head,
-        ts_next.as_secs_f32(),
-        playback_score[new_head].time.as_secs_f32(),
-        dt_next.as_secs_f32(),
-        100.0 * prev_match.stretch_factor,
-    );
     Ok((new_head, dt_next))
 }
 
