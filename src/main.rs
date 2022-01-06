@@ -5,7 +5,7 @@ use midly::MidiMessage::NoteOn;
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::playback::play_next_moment;
+use selim::playback::play_past_moments;
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
@@ -117,58 +117,75 @@ fn play_next(
     playback_score: &[ScoreEvent],
     head: usize, // index of next score note to be played
     matches: &[Match],
-    now: Duration, // relative to start time of live
+    t: Duration, // system time since Unix Epoch
 ) -> Result<(usize, Duration), Box<dyn Error>> {
     if head >= playback_score.len() {
-        return Ok((head, Duration::from_secs(1)));
+        // The playback score has reached end. Only react to live notes from now on.
+        return Ok((head, Duration::from_secs(3600)));
     }
+
+    // Calculate the wall clock time for when to play the next moment in the playback score:
+    // - PREV = the last successfully matched live input note
+    // - t = wall time now
+    // - t_prev = wall time of PREV
+    // - ts_prev = score time of PREV
+    // - v = stretch factor at PREV
+    // - dt = elapsed wall time since PREV
+    // - dts = estimated score elapsed time since PREV
+    // - ts_next = score time of next upcoming playback note
+    // - ts = estimated score time now
+    // - t_next = estimated wall time of next upcoming playback note
     let prev_match = matches
         .last()
         .expect("play_next() needs a non-empty list of matches");
-    let score_time_at_prev_match = expect_score[prev_match.score_index].time;
+    let t_prev = live[prev_match.live_index].time;
+    let ts_prev = expect_score[prev_match.score_index].time;
+    let v = prev_match.stretch_factor;
+    let dt = t - t_prev;
+    let dts = stretch(dt, 1.0 / v);
+    let ts_next = playback_score[head].time;
+    let ts = ts_prev + dts;
     println!(
         "  now = {:.3}, last match = {:.3}",
-        now.as_secs_f32(),
-        live[prev_match.live_index].time.as_secs_f32()
+        t.as_secs_f32(),
+        t_prev.as_secs_f32()
     );
-    let wall_time_since_prev_match = now - live[prev_match.live_index].time;
-    let score_time_since_prev_match =
-        stretch(wall_time_since_prev_match, prev_match.stretch_factor);
-    let score_calculated_moment = score_time_at_prev_match + score_time_since_prev_match;
-    let prev_moment = playback_score[head].time;
     println!(
         " play {:>3} {:>7.3} next. Could play {:.3}s until {:.3}s at {:3.0}% speed. {:.3}s since previous match at {:.3}s.",
         head,
-        prev_moment.as_secs_f32(),
-        score_time_since_prev_match.as_secs_f32(),
-        score_calculated_moment.as_secs_f32(),
+        ts_next.as_secs_f32(),
+        dts.as_secs_f32(),
+        ts.as_secs_f32(),
         100.0 * prev_match.stretch_factor,
-        wall_time_since_prev_match.as_secs_f32(),
-        score_time_at_prev_match.as_secs_f32(),
+        dt.as_secs_f32(),
+        ts_prev.as_secs_f32(),
     );
-    let new_head = play_next_moment(playback_score, head, score_calculated_moment, conn_out)?;
-    let wait = if new_head >= playback_score.len() {
+    let new_head = play_past_moments(playback_score, head, ts, conn_out)?;
+    let dt_next = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
-        let time_to_catch = stretch(
-            playback_score[new_head].time - prev_moment,
-            prev_match.stretch_factor,
+        let ts_next = playback_score[new_head].time;
+        println!(
+            "dts_next = ts_next:{:.3}s - ts:{:.3}s",
+            ts_next.as_secs_f32(),
+            ts.as_secs_f32()
         );
-        if time_to_catch > Duration::ZERO {
-            time_to_catch.max(Duration::from_millis(10))
+        if ts_next < ts {
+            Duration::from_millis(10)
         } else {
-            Duration::from_secs(1)
+            let dts_next = ts_next - ts;
+            stretch(dts_next, v)
         }
     };
     println!(
         "Score @{} waiting between {:.3}s and {:.3}s for {:.3}s, stretched {:.0}%.",
         new_head,
-        prev_moment.as_secs_f32(),
+        ts_next.as_secs_f32(),
         playback_score[new_head].time.as_secs_f32(),
-        wait.as_secs_f32(),
+        dt_next.as_secs_f32(),
         100.0 * prev_match.stretch_factor,
     );
-    Ok((new_head, wait))
+    Ok((new_head, dt_next))
 }
 
 fn print_expect(input_score: &[ScoreNote], prev_match: &Option<&Match>) {

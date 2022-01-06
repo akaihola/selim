@@ -7,7 +7,7 @@ use nodi::{Event, MidiEvent};
 
 use crate::score::{pitch_to_name, ScoreEvent};
 
-pub fn play_next_moment(
+pub fn play_past_moments(
     score: &[ScoreEvent],
     head: usize,
     score_calculated_moment: Duration,
