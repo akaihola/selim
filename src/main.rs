@@ -6,7 +6,7 @@ use midly::MidiMessage::NoteOn;
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::playback::{play_next_moment};
+use selim::playback::play_next_moment;
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::{follow_score, Match};
 use std::boxed::Box;
@@ -64,24 +64,25 @@ fn run(
     let mut matches = vec![];
     let mut playback_head = 0;
     let mut live_start_time = None;
-    let mut system_time_at_last_match = None;
     let mut score_wait = Duration::from_secs(1);
     loop {
         if handle_ctrl_c(&caught_ctrl_c, &mut conn_out) {
             return Ok(());
         }
-        print_expect(&input_score, matches.last());
-        if let (Some(prev_match), Some(prev_system_time)) =
-            (matches.last(), system_time_at_last_match)
-        {
+        print_expect(&input_score, &matches.last());
+        if let (Some(_), Some(_live_start)) = (matches.last(), live_start_time) {
+            let now = match live_start_time {
+                None => Duration::ZERO,
+                Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
+            };
             let (_new_playback_head, _score_wait) = play_next(
                 &mut conn_out,
                 &input_score,
+                &live,
                 &playback_score,
                 playback_head,
-                *prev_match,
-                prev_system_time,
-                SystemTime::now(),
+                &matches,
+                now,
             )?;
             playback_head = _new_playback_head;
             score_wait = _score_wait;
@@ -90,21 +91,18 @@ fn run(
         }
         select! {
             recv(midi_input.rx) -> note_result => {
+                let note = note_result?;
                 let live_time = match live_start_time {
                     None => {
-                        live_start_time = Some(SystemTime::now());
-                        Duration::new(0, 0)
+                        live_start_time = Some(SystemTime::now() - note.time);
+                        Duration::ZERO
                     }
                     Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
                 };
-                let note = note_result?;
                 live.push(note);
                 let (new_matches, ignored) =
                     follow_score(&input_score, &live, matches.last().cloned(), new_live_index, live_time);
-                if !new_matches.is_empty() {
-                    system_time_at_last_match = Some(SystemTime::now());
-                    matches.extend(new_matches.iter());
-                }
+                matches.extend(new_matches.iter());
                 print_got(&live, note, &new_matches, &ignored);
                 new_live_index = live.len();
             },
@@ -119,22 +117,30 @@ fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
 
 fn play_next(
     conn_out: &mut MidiOutputConnection,
-    input_score: &[ScoreNote],
-    score: &[ScoreEvent],
+    expect_score: &[ScoreNote],
+    live: &[ScoreNote],
+    playback_score: &[ScoreEvent],
     head: usize, // index of next score note to be played
-    prev_match: Match,
-    prev_system_time: SystemTime,
-    now: SystemTime,
+    matches: &[Match],
+    now: Duration, // relative to start time of live
 ) -> Result<(usize, Duration), Box<dyn Error>> {
-    if head >= score.len() {
+    if head >= playback_score.len() {
         return Ok((head, Duration::from_secs(1)));
     }
-    let prev_match_time = input_score[prev_match.score_index].time;
-    let wall_time_since_prev_match = now.duration_since(prev_system_time).unwrap();
+    let prev_match = matches
+        .last()
+        .expect("play_next() needs a non-empty list of matches");
+    let score_time_at_prev_match = expect_score[prev_match.score_index].time;
+    println!(
+        "  now = {}, last match = {}",
+        now.as_secs_f32(),
+        live[prev_match.live_index].time.as_secs_f32()
+    );
+    let wall_time_since_prev_match = now - live[prev_match.live_index].time;
     let score_time_since_prev_match =
         stretch(wall_time_since_prev_match, prev_match.stretch_factor);
-    let score_calculated_moment = prev_match_time + score_time_since_prev_match;
-    let prev_moment = score[head].time;
+    let score_calculated_moment = score_time_at_prev_match + score_time_since_prev_match;
+    let prev_moment = playback_score[head].time;
     println!(
         " play {:>3} {:>7.3} next. Could play {:.3}s until {:.3}s at {:3.0}% speed. {:.3}s since previous match at {:.3}s.",
         head,
@@ -143,29 +149,32 @@ fn play_next(
         score_calculated_moment.as_secs_f32(),
         100.0 * prev_match.stretch_factor,
         wall_time_since_prev_match.as_secs_f32(),
-        prev_match_time.as_secs_f32(),
+        score_time_at_prev_match.as_secs_f32(),
     );
-    let head = play_next_moment(score, head, score_calculated_moment, conn_out)?;
-    let wait = if head >= score.len() {
+    let new_head = play_next_moment(playback_score, head, score_calculated_moment, conn_out)?;
+    let wait = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
         println!(
             "Score @{} {:.3}s should be ahead of {:.3}s",
-            head,
-            score[head].time.as_secs_f32(),
+            new_head,
+            playback_score[new_head].time.as_secs_f32(),
             prev_moment.as_secs_f32(),
         );
-        let time_to_catch = stretch(score[head].time - prev_moment, prev_match.stretch_factor);
+        let time_to_catch = stretch(
+            playback_score[new_head].time - prev_moment,
+            prev_match.stretch_factor,
+        );
         if time_to_catch > Duration::ZERO {
             time_to_catch.max(Duration::from_millis(10))
         } else {
             Duration::from_secs(1)
         }
     };
-    Ok((head, wait))
+    Ok((new_head, wait))
 }
 
-fn print_expect(input_score: &[ScoreNote], prev_match: Option<&Match>) {
+fn print_expect(input_score: &[ScoreNote], prev_match: &Option<&Match>) {
     let score_next = match prev_match {
         Some(Match {
             score_index,
