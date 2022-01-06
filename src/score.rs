@@ -128,7 +128,11 @@ pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<Scor
         .filter_map(|ScoreEvent { time, message }| match message {
             Midi {
                 channel: _,
-                message: NoteOn { key: _, vel: ZERO_U7 },
+                message:
+                    NoteOn {
+                        key: _,
+                        vel: ZERO_U7,
+                    },
             } => None,
             Midi {
                 channel: _,
@@ -217,10 +221,10 @@ mod tests {
     fn load_midi_file_clementi() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
         let score = load_midi_file_note_ons(&path, vec![]);
-        assert_eq!(score.len(), 1332);
+        assert_eq!(score.len(), 666);
         assert_eq!(
             score[..5],
-            notes![(0, 48), (0, 72), (500, 72), (500, 76), (500, 48)]
+            notes![(0, 48), (0, 72), (500, 76), (750, 72), (1000, 67)]
         );
     }
 
@@ -228,10 +232,10 @@ mod tests {
     fn load_midi_file_clementi_track_1_channel_1() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
         let score = load_midi_file_note_ons(&path, vec![chnls!(1, vec![0])]);
-        assert_eq!(score.len(), 908);
+        assert_eq!(score.len(), 454);
         assert_eq!(
             score[..5],
-            notes![(0, 72), (500, 72), (500, 76), (750, 76), (750, 72)]
+            notes![(0, 72), (500, 76), (750, 72), (1000, 67), (1500, 67)]
         );
     }
 
