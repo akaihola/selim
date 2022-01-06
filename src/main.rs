@@ -2,7 +2,6 @@ use crossbeam_channel::{after, select, Sender};
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::MidiMessage::NoteOn;
-
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
@@ -13,7 +12,7 @@ use std::boxed::Box;
 use std::error::Error;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn main() {
     let caught_ctrl_c = attach_ctrl_c_handler();
@@ -32,7 +31,13 @@ fn main() {
     }
 }
 
-fn callback(microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
+fn duration_since_unix_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System clock error")
+}
+
+fn callback(_microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
     let event = LiveEvent::parse(message).expect("Unparseable MIDI message");
     if let Midi {
         channel: _,
@@ -40,7 +45,7 @@ fn callback(microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
     } = event
     {
         tx.send(ScoreNote {
-            time: Duration::from_micros(microsecond),
+            time: duration_since_unix_epoch(),
             pitch: key,
         })
         .expect("Can't pass on a MIDI message in the internal channel");
@@ -63,18 +68,14 @@ fn run(
     let mut new_live_index = 0;
     let mut matches = vec![];
     let mut playback_head = 0;
-    let mut live_start_time = None;
     let mut score_wait = Duration::from_secs(1);
     loop {
         if handle_ctrl_c(&caught_ctrl_c, &mut conn_out) {
             return Ok(());
         }
         print_expect(&input_score, &matches.last());
-        if let (Some(_), Some(_live_start)) = (matches.last(), live_start_time) {
-            let now = match live_start_time {
-                None => Duration::ZERO,
-                Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
-            };
+        if matches.last().is_some() {
+            let now = duration_since_unix_epoch();
             let (_new_playback_head, _score_wait) = play_next(
                 &mut conn_out,
                 &input_score,
@@ -92,13 +93,7 @@ fn run(
         select! {
             recv(midi_input.rx) -> note_result => {
                 let note = note_result?;
-                let live_time = match live_start_time {
-                    None => {
-                        live_start_time = Some(SystemTime::now() - note.time);
-                        Duration::ZERO
-                    }
-                    Some(earlier) => SystemTime::now().duration_since(earlier).unwrap(),
-                };
+                let live_time = duration_since_unix_epoch();
                 live.push(note);
                 let (new_matches, ignored) =
                     follow_score(&input_score, &live, matches.last().cloned(), new_live_index, live_time);
@@ -132,7 +127,7 @@ fn play_next(
         .expect("play_next() needs a non-empty list of matches");
     let score_time_at_prev_match = expect_score[prev_match.score_index].time;
     println!(
-        "  now = {}, last match = {}",
+        "  now = {:.3}, last match = {:.3}",
         now.as_secs_f32(),
         live[prev_match.live_index].time.as_secs_f32()
     );
@@ -155,12 +150,6 @@ fn play_next(
     let wait = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
-        println!(
-            "Score @{} {:.3}s should be ahead of {:.3}s",
-            new_head,
-            playback_score[new_head].time.as_secs_f32(),
-            prev_moment.as_secs_f32(),
-        );
         let time_to_catch = stretch(
             playback_score[new_head].time - prev_moment,
             prev_match.stretch_factor,
@@ -171,6 +160,14 @@ fn play_next(
             Duration::from_secs(1)
         }
     };
+    println!(
+        "Score @{} waiting between {:.3}s and {:.3}s for {:.3}s, stretched {:.0}%.",
+        new_head,
+        prev_moment.as_secs_f32(),
+        playback_score[new_head].time.as_secs_f32(),
+        wait.as_secs_f32(),
+        100.0 * prev_match.stretch_factor,
+    );
     Ok((new_head, wait))
 }
 
