@@ -77,14 +77,7 @@ impl<'a> ScoreFollower for HomophonoPedantic<'a> {
     /// * for all matched notes, the index in the score and in the live performance
     /// * ignored new input notes as a list of live performance indices
     fn follow_score(&mut self, new_live_index: usize, live_time: Duration) {
-        let prev_match = self.matches.last().cloned();
-        let (new_matches, ignored) = find_new_matches(
-            self.score,
-            &self.live,
-            prev_match,
-            new_live_index,
-            live_time,
-        );
+        let (new_matches, ignored) = self.find_new_matches(new_live_index, live_time);
         self.matches.extend(new_matches);
         self.ignored.extend(ignored);
     }
@@ -98,56 +91,57 @@ impl<'a> ScoreFollower for HomophonoPedantic<'a> {
     }
 }
 
-/// Finds matches in the score for new notes in the live performance
-///
-/// # Arguments
-///
-/// * score - The complete expected musical score with timestamps and pitches
-/// * live - The live performance recorded so far, with timestamps and pitches
-/// * prev_match_score_index - Index of the last note so far which has been matched
-///                            between the live performance and the expected score
-/// * new_live_index - Index of the first new note received for the live performance
-///                    since the previous round
-///
-/// # Return value
-///
-/// A 2-tuple of
-/// * newly found matches between the live performance and the expected score
-/// * ignored new input notes (as a list of live performance indices)
-fn find_new_matches(
-    score: &[ScoreNote],
-    live: &[ScoreNote],
-    prev_match: Option<Match>,
-    new_live_index: usize,
-    _live_time: Duration,
-) -> (Vec<Match>, Vec<usize>) {
-    let mut score_pointer = match prev_match {
-        Some(i) => i.score_index + 1, // continue in the score just after last previous match, or
-        None => 0,                    // start from beginning of score if nothing matched yet
-    };
-    let mut matches: Vec<Match> = vec![];
-    let mut ignored: Vec<usize> = vec![];
-    let mut prev_match = prev_match;
-    for (live_index, live_note) in live.iter().enumerate().skip(new_live_index) {
-        let matching_index = find_next_match_starting_at(score, score_pointer, live_note.pitch);
-        match matching_index {
-            Some(score_index) => {
-                let stretch_factor = get_stretch_factor_at_match(
-                    score,
-                    live,
-                    prev_match,
-                    score_index,
-                    live_note.time,
-                );
-                let new_match = Match::new(score_index, live_index, stretch_factor);
-                matches.push(new_match);
-                score_pointer = score_index + 1;
-                prev_match = Some(new_match);
-            }
-            None => ignored.push(live_index),
+impl HomophonoPedantic<'_> {
+    /// Finds matches in the score for new notes in the live performance
+    ///
+    /// # Arguments
+    ///
+    /// * score - The complete expected musical score with timestamps and pitches
+    /// * live - The live performance recorded so far, with timestamps and pitches
+    /// * prev_match_score_index - Index of the last note so far which has been matched
+    ///                            between the live performance and the expected score
+    /// * new_live_index - Index of the first new note received for the live performance
+    ///                    since the previous round
+    ///
+    /// # Return value
+    ///
+    /// A 2-tuple of
+    /// * newly found matches between the live performance and the expected score
+    /// * ignored new input notes (as a list of live performance indices)
+    fn find_new_matches(
+        &self,
+        new_live_index: usize,
+        _live_time: Duration,
+    ) -> (Vec<Match>, Vec<usize>) {
+        let mut prev_match = self.last_match().cloned();
+        let mut score_pointer = match prev_match {
+            Some(i) => i.score_index + 1, // continue in the score just after last previous match, or
+            None => 0,                    // start from beginning of score if nothing matched yet
         };
+        let mut matches: Vec<Match> = vec![];
+        let mut ignored: Vec<usize> = vec![];
+        for (live_index, live_note) in self.live.iter().enumerate().skip(new_live_index) {
+            let matching_index =
+                find_next_match_starting_at(self.score, score_pointer, live_note.pitch);
+            match matching_index {
+                Some(score_index) => {
+                    let stretch_factor = get_stretch_factor_at_match(
+                        self.score,
+                        &self.live,
+                        prev_match,
+                        score_index,
+                        live_note.time,
+                    );
+                    let new_match = Match::new(score_index, live_index, stretch_factor);
+                    matches.push(new_match);
+                    score_pointer = score_index + 1;
+                    prev_match = Some(new_match);
+                }
+                None => ignored.push(live_index),
+            };
+        }
+        (matches, ignored)
     }
-    (matches, ignored)
 }
 
 fn get_stretch_factor_at_match(
