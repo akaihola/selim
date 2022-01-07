@@ -1,20 +1,19 @@
-use std::{error::Error, time::Duration};
-
-use midir::MidiOutputConnection;
+use crate::score::{pitch_to_name, ScoreEvent};
 use midly::MidiMessage::NoteOn;
 use midly::TrackEventKind;
-use nodi::{Event, MidiEvent};
+use nodi::Event;
+use std::{error::Error, time::Duration};
 
-use crate::score::{pitch_to_name, ScoreEvent};
+pub type MidiMessages = Vec<Vec<u8>>;
 
 pub fn play_past_moments(
     score: &[ScoreEvent],
     head: usize,
     score_calculated_moment: Duration,
-    conn_out: &mut MidiOutputConnection,
-) -> Result<usize, Box<dyn Error>> {
+) -> Result<(MidiMessages, usize), Box<dyn Error>> {
     let moment_to_play = score[head].time;
     let mut head = head;
+    let mut buf = MidiMessages::new();
     if moment_to_play <= score_calculated_moment {
         loop {
             if head >= score.len() {
@@ -37,24 +36,22 @@ pub fn play_past_moments(
                     vel.as_int(),
                 );
             }
-            play_midi_event(score_event, conn_out)?;
+            if let Some(midi_data) = encode_midi_event(score_event)? {
+                buf.push(midi_data);
+            }
             head += 1;
         }
     }
-    Ok(head)
+    Ok((buf, head))
 }
 
-pub fn play_midi_event(
-    event: &ScoreEvent,
-    conn_out: &mut MidiOutputConnection,
-) -> Result<Option<MidiEvent>, Box<dyn Error>> {
+pub fn encode_midi_event(event: &ScoreEvent) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
     if let TrackEventKind::Midi { .. } = event.message {
         let ev = Event::try_from(event.message)?;
         if let Event::Midi(midi_event) = ev {
             let mut message = Vec::with_capacity(4);
             let _ = midi_event.write(&mut message);
-            conn_out.send(&message)?;
-            return Ok(Some(midi_event));
+            return Ok(Some(message));
         }
     }
     Ok(None)

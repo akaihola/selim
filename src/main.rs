@@ -1,12 +1,11 @@
 use crossbeam_channel::{after, select, Sender};
-use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::MidiMessage::NoteOn;
 use selim::algo01_homophonopedantic::{HomophonoPedantic, ScoreFollower};
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::playback::play_past_moments;
+use selim::playback::{play_past_moments, MidiMessages};
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
 use selim::Match;
 use std::boxed::Box;
@@ -56,11 +55,11 @@ fn callback(_microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
 fn run(
     input_device: DeviceSelector,
     playback_device: DeviceSelector,
-    input_score: Vec<ScoreNote>,
+    expect_score: Vec<ScoreNote>,
     playback_score: Vec<ScoreEvent>,
     caught_ctrl_c: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn Error>> {
-    assert!(!input_score.is_empty());
+    assert!(!expect_score.is_empty());
 
     let midi_input = open_midi_input(input_device, callback)?;
     let mut conn_out = open_midi_output(playback_device)?;
@@ -68,27 +67,38 @@ fn run(
     let mut new_live_index = 0;
     let mut playback_head = 0;
     let mut score_wait = Duration::from_secs(1);
-    let mut follower = HomophonoPedantic::new(&input_score);
+    let mut follower = HomophonoPedantic::new(&expect_score);
+    let mut buf = MidiMessages::new();
+    let mut play = false;
+    let mut quit = false;
+
     loop {
-        if handle_ctrl_c(&caught_ctrl_c, &mut conn_out) {
-            return Ok(());
+        if play {
+            play = false;
+            print_expect(&expect_score, &follower.last_match());
+            if follower.last_match().is_some() {
+                let t = duration_since_unix_epoch();
+                let (midi_data, _new_playback_head, _score_wait) = play_next(
+                    &expect_score,
+                    &follower.live,
+                    &playback_score,
+                    playback_head,
+                    &follower.matches,
+                    t,
+                )?;
+                buf.extend(midi_data);
+                playback_head = _new_playback_head;
+                score_wait = _score_wait;
+            } else {
+                println!("no new notes to play")
+            }
         }
-        print_expect(&input_score, &follower.last_match());
-        if follower.last_match().is_some() {
-            let now = duration_since_unix_epoch();
-            let (_new_playback_head, _score_wait) = play_next(
-                &mut conn_out,
-                &input_score,
-                &follower.live,
-                &playback_score,
-                playback_head,
-                &follower.matches,
-                now,
-            )?;
-            playback_head = _new_playback_head;
-            score_wait = _score_wait;
-        } else {
-            println!("no new notes to play")
+        for message in &buf {
+            conn_out.send(message)?;
+        }
+        buf.clear();
+        if quit {
+            return Ok(());
         }
         select! {
             recv(midi_input.rx) -> note_result => {
@@ -99,8 +109,17 @@ fn run(
                 follower.follow_score(new_live_index);
                 print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
                 new_live_index = follower.live.len();
+                play = true;
             },
-            recv(after(score_wait)) -> _ => {}
+            recv(after(score_wait)) -> _ => {
+                play = true;
+            },
+            recv(after(Duration::from_millis(1000))) -> _ => {
+                if let Some(midi_reset) = handle_ctrl_c(&caught_ctrl_c) {
+                    buf.extend(midi_reset);
+                    quit = true;
+                }
+            },
         };
     }
 }
@@ -110,17 +129,16 @@ fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
 }
 
 fn play_next(
-    conn_out: &mut MidiOutputConnection,
     expect_score: &[ScoreNote],
     live: &[ScoreNote],
     playback_score: &[ScoreEvent],
     head: usize, // index of next score note to be played
     matches: &[Match],
     t: Duration, // system time since Unix Epoch
-) -> Result<(usize, Duration), Box<dyn Error>> {
+) -> Result<(MidiMessages, usize, Duration), Box<dyn Error>> {
     if head >= playback_score.len() {
         // The playback score has reached end. Only react to live notes from now on.
-        return Ok((head, Duration::from_secs(3600)));
+        return Ok((vec![], head, Duration::from_secs(3600)));
     }
 
     // Calculate the wall clock time for when to play the next moment in the playback score:
@@ -143,7 +161,7 @@ fn play_next(
     let dt = t - t_prev;
     let dts = stretch(dt, 1.0 / k);
     let ts = ts_prev + dts;
-    let new_head = play_past_moments(playback_score, head, ts, conn_out)?;
+    let (buf, new_head) = play_past_moments(playback_score, head, ts)?;
     let dt_next = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
@@ -155,10 +173,10 @@ fn play_next(
             stretch(dts_next, k)
         }
     };
-    Ok((new_head, dt_next))
+    Ok((buf, new_head, dt_next))
 }
 
-fn print_expect(input_score: &[ScoreNote], prev_match: &Option<&Match>) {
+fn print_expect(expect_score: &[ScoreNote], prev_match: &Option<&Match>) {
     let score_next = match prev_match {
         Some(Match {
             score_index,
@@ -167,12 +185,12 @@ fn print_expect(input_score: &[ScoreNote], prev_match: &Option<&Match>) {
         }) => score_index + 1,
         _ => 0,
     };
-    if score_next < input_score.len() {
+    if score_next < expect_score.len() {
         println!(
             "score {:>3} {:>7.3} expect {}",
             score_next,
-            input_score[score_next].time.as_secs_f32(),
-            pitch_to_name(input_score[score_next].pitch),
+            expect_score[score_next].time.as_secs_f32(),
+            pitch_to_name(expect_score[score_next].pitch),
         );
     }
 }

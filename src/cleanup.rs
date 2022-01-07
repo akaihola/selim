@@ -3,7 +3,6 @@ use std::sync::{
     Arc,
 };
 
-use midir::MidiOutputConnection;
 use midly::{
     live::LiveEvent,
     num::{u4, u7},
@@ -25,27 +24,24 @@ pub fn attach_ctrl_c_handler() -> Arc<AtomicBool> {
     caught_ctrl_c
 }
 
-pub fn handle_ctrl_c(caught_ctrl_c: &Arc<AtomicBool>, conn_out: &mut MidiOutputConnection) -> bool {
+pub fn handle_ctrl_c(caught_ctrl_c: &Arc<AtomicBool>) -> Option<[Vec<u8>; 16]> {
     if caught_ctrl_c.load(Ordering::SeqCst) {
         let cc = midly::MidiMessage::Controller {
             controller: u7::from(120),
             value: u7::from(0),
         };
+        let mut buf: [Vec<u8>; 16] = Default::default();
         for channel in 0..16 {
             let ev = LiveEvent::Midi {
                 channel: u4::from(channel),
                 message: cc,
             };
-            let mut buf = Vec::new();
-            ev.write(&mut buf)
+            ev.write(&mut buf[usize::from(channel)])
                 .expect("Can't create All Sound Off MIDI event");
-            conn_out
-                .send(&buf)
-                .expect("Can't send All Sound Off MIDI event");
         }
         println!("received Ctrl+C!");
-        true
+        Some(buf)
     } else {
-        false
+        None
     }
 }
