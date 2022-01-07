@@ -93,11 +93,10 @@ fn run(
         select! {
             recv(midi_input.rx) -> note_result => {
                 let note = note_result?;
-                let live_time = duration_since_unix_epoch();
                 follower.push_live(note);
                 let new_matches_offset = follower.matches.len();
                 let new_ignored_offset = follower.ignored.len();
-                follower.follow_score(new_live_index, live_time);
+                follower.follow_score(new_live_index);
                 print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
                 new_live_index = follower.live.len();
             },

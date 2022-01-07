@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{find_next_match_starting_at, get_stretch_factor, score::ScoreNote, Match};
 
 pub trait ScoreFollower {
-    fn follow_score(&mut self, new_live_index: usize, live_time: Duration);
+    fn follow_score(&mut self, new_live_index: usize);
     fn last_match(&self) -> Option<&Match>;
     fn push_live(&mut self, note: ScoreNote);
 }
@@ -76,8 +76,8 @@ impl<'a> ScoreFollower for HomophonoPedantic<'a> {
     /// * the time stretch factor at the last new matching input note
     /// * for all matched notes, the index in the score and in the live performance
     /// * ignored new input notes as a list of live performance indices
-    fn follow_score(&mut self, new_live_index: usize, live_time: Duration) {
-        let (new_matches, ignored) = self.find_new_matches(new_live_index, live_time);
+    fn follow_score(&mut self, new_live_index: usize) {
+        let (new_matches, ignored) = self.find_new_matches(new_live_index);
         self.matches.extend(new_matches);
         self.ignored.extend(ignored);
     }
@@ -108,13 +108,8 @@ impl HomophonoPedantic<'_> {
     /// A 2-tuple of
     /// * newly found matches between the live performance and the expected score
     /// * ignored new input notes (as a list of live performance indices)
-    fn find_new_matches(
-        &self,
-        new_live_index: usize,
-        _live_time: Duration,
-    ) -> (Vec<Match>, Vec<usize>) {
-        let mut prev_match = self.last_match().cloned();
-        let mut score_pointer = match prev_match {
+    fn find_new_matches(&self, new_live_index: usize) -> (Vec<Match>, Vec<usize>) {
+        let mut score_pointer = match self.last_match().cloned() {
             Some(i) => i.score_index + 1, // continue in the score just after last previous match, or
             None => 0,                    // start from beginning of score if nothing matched yet
         };
@@ -125,42 +120,39 @@ impl HomophonoPedantic<'_> {
                 find_next_match_starting_at(self.score, score_pointer, live_note.pitch);
             match matching_index {
                 Some(score_index) => {
-                    let stretch_factor = get_stretch_factor_at_match(
-                        self.score,
-                        &self.live,
-                        prev_match,
-                        score_index,
-                        live_note.time,
-                    );
+                    let stretch_factor =
+                        self.get_stretch_factor_at_new_match(score_index, live_note.time);
                     let new_match = Match::new(score_index, live_index, stretch_factor);
                     matches.push(new_match);
                     score_pointer = score_index + 1;
-                    prev_match = Some(new_match);
                 }
                 None => ignored.push(live_index),
             };
         }
         (matches, ignored)
     }
-}
 
-fn get_stretch_factor_at_match(
-    score: &[ScoreNote],
-    live: &[ScoreNote],
-    prev_match: Option<Match>,
-    next_match_score_index: usize,
-    next_match_live_time: Duration,
-) -> f32 {
-    match prev_match {
-        Some(Match {
-            score_index: prev_match_score_index,
-            live_index,
-            stretch_factor: _,
-        }) => get_stretch_factor(
-            score[next_match_score_index].time - score[prev_match_score_index].time,
-            next_match_live_time - live[live_index].time,
-        ),
-        None => 1.0,
+    fn get_stretch_factor_at_new_match(
+        &self,
+        new_match_score_index: usize,
+        new_match_in_live_time: Duration,
+    ) -> f32 {
+        match self.last_match().cloned() {
+            Some(Match {
+                score_index: prev_match_score_index,
+                live_index,
+                stretch_factor: _,
+            }) => {
+                let new_match_in_score = self.score[new_match_score_index];
+                let prev_match_in_score = self.score[prev_match_score_index];
+                let prev_match_in_live = self.live[live_index];
+                get_stretch_factor(
+                    new_match_in_score.time - prev_match_in_score.time,
+                    new_match_in_live_time - prev_match_in_live.time,
+                )
+            }
+            None => 1.0,
+        }
     }
 }
 
@@ -172,16 +164,13 @@ mod tests {
 
     static TEST_SCORE: Lazy<[ScoreNote; 3]> =
         Lazy::new(|| notes![(1000, 60), (1100, 62), (1200, 64)]);
-    fn live_time() -> Duration {
-        Duration::new(0, 0)
-    }
 
     #[test]
     fn match_the_only_note() {
         let score = notes![(1000, 60)];
         let mut follower = HomophonoPedantic::new(&score);
         follower.live.extend(notes![(5, 60)]);
-        follower.follow_score(0, live_time());
+        follower.follow_score(0);
         assert_eq!(follower.matches, [Match::new(0, 0, 1.0)]);
         assert!(follower.ignored.is_empty());
     }
@@ -190,7 +179,7 @@ mod tests {
     fn match_first() {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60)]);
-        follower.follow_score(0, live_time());
+        follower.follow_score(0);
         assert_eq!(follower.matches, [Match::new(0, 0, 1.0)]);
         assert!(follower.ignored.is_empty());
     }
@@ -200,7 +189,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 62)]);
         follower.matches.push(Match::new(0, 0, 1.0));
-        follower.follow_score(1, live_time());
+        follower.follow_score(1);
         assert_eq!(follower.matches[1..], [Match::new(1, 1, 0.5)]);
         assert!(follower.ignored.is_empty());
     }
@@ -210,7 +199,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (25, 61), (55, 62)]);
         follower.matches.push(Match::new(0, 0, 1.0));
-        follower.follow_score(1, live_time());
+        follower.follow_score(1);
         assert_eq!(follower.matches[1..], [Match::new(1, 2, 0.5)]);
         assert_eq!(follower.ignored, vec![1]);
     }
@@ -220,7 +209,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 64)]);
         follower.matches.push(Match::new(0, 0, 1.0));
-        follower.follow_score(1, live_time());
+        follower.follow_score(1);
         assert_eq!(follower.matches[1..], [Match::new(2, 1, 0.25)]);
         assert!(follower.ignored.is_empty());
     }
@@ -230,7 +219,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 63), (105, 66)]);
         follower.matches.push(Match::new(0, 0, 1.0));
-        follower.follow_score(1, live_time());
+        follower.follow_score(1);
         assert!(follower.matches[1..].is_empty());
         assert_eq!(follower.ignored, vec![1, 2]);
     }
