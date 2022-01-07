@@ -2,12 +2,13 @@ use crossbeam_channel::{after, select, Sender};
 use midir::MidiOutputConnection;
 use midly::live::{LiveEvent, LiveEvent::Midi};
 use midly::MidiMessage::NoteOn;
+use selim::algo01_homophonopedantic::{HomophonoPedantic, ScoreFollower};
 use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
 use selim::cmdline::parse_args;
 use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
 use selim::playback::play_past_moments;
 use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
-use selim::{follow_score, Match};
+use selim::Match;
 use std::boxed::Box;
 use std::error::Error;
 use std::sync::atomic::AtomicBool;
@@ -64,25 +65,24 @@ fn run(
     let midi_input = open_midi_input(input_device, callback)?;
     let mut conn_out = open_midi_output(playback_device)?;
 
-    let mut live = vec![];
     let mut new_live_index = 0;
-    let mut matches = vec![];
     let mut playback_head = 0;
     let mut score_wait = Duration::from_secs(1);
+    let mut follower = HomophonoPedantic::new(&input_score);
     loop {
         if handle_ctrl_c(&caught_ctrl_c, &mut conn_out) {
             return Ok(());
         }
-        print_expect(&input_score, &matches.last());
-        if matches.last().is_some() {
+        print_expect(&input_score, &follower.last_match());
+        if follower.last_match().is_some() {
             let now = duration_since_unix_epoch();
             let (_new_playback_head, _score_wait) = play_next(
                 &mut conn_out,
                 &input_score,
-                &live,
+                &follower.live,
                 &playback_score,
                 playback_head,
-                &matches,
+                &follower.matches,
                 now,
             )?;
             playback_head = _new_playback_head;
@@ -94,12 +94,12 @@ fn run(
             recv(midi_input.rx) -> note_result => {
                 let note = note_result?;
                 let live_time = duration_since_unix_epoch();
-                live.push(note);
-                let (new_matches, ignored) =
-                    follow_score(&input_score, &live, matches.last().cloned(), new_live_index, live_time);
-                matches.extend(new_matches.iter());
-                print_got(&live, note, &new_matches, &ignored);
-                new_live_index = live.len();
+                follower.push_live(note);
+                let new_matches_offset = follower.matches.len();
+                let new_ignored_offset = follower.ignored.len();
+                follower.follow_score(new_live_index, live_time);
+                print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
+                new_live_index = follower.live.len();
             },
             recv(after(score_wait)) -> _ => {}
         };
