@@ -122,7 +122,13 @@ impl HomophonoPedantic<'_> {
                 Some(score_index) => {
                     let stretch_factor =
                         self.get_stretch_factor_at_new_match(score_index, live_note.time);
-                    let new_match = Match::new(score_index, live_index, stretch_factor);
+                    let new_match = Match::new(
+                        score_index,
+                        live_index,
+                        stretch_factor,
+                        self.score[score_index].velocity.into(),
+                        self.live[live_index].velocity.into(),
+                    );
                     matches.push(new_match);
                     score_pointer = score_index + 1;
                 }
@@ -142,6 +148,8 @@ impl HomophonoPedantic<'_> {
                 score_index: prev_match_score_index,
                 live_index,
                 stretch_factor: _,
+                score_velocity: _,
+                live_velocity: _,
             }) => {
                 let new_match_in_score = self.score[new_match_score_index];
                 let prev_match_in_score = self.score[prev_match_score_index];
@@ -171,7 +179,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&score);
         follower.live.extend(notes![(5, 60)]);
         follower.follow_score(0);
-        assert_eq!(follower.matches, [Match::new(0, 0, 1.0)]);
+        assert_eq!(follower.matches, [Match::new(0, 0, 1.0, 100, 100)]);
         assert!(follower.ignored.is_empty());
     }
 
@@ -180,7 +188,7 @@ mod tests {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60)]);
         follower.follow_score(0);
-        assert_eq!(follower.matches, [Match::new(0, 0, 1.0)]);
+        assert_eq!(follower.matches, [Match::new(0, 0, 1.0, 100, 100)]);
         assert!(follower.ignored.is_empty());
     }
 
@@ -188,9 +196,9 @@ mod tests {
     fn match_second() {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 62)]);
-        follower.matches.push(Match::new(0, 0, 1.0));
+        follower.matches.push(Match::new(0, 0, 1.0, 100, 100));
         follower.follow_score(1);
-        assert_eq!(follower.matches[1..], [Match::new(1, 1, 0.5)]);
+        assert_eq!(follower.matches[1..], [Match::new(1, 1, 0.5, 100, 100)]);
         assert!(follower.ignored.is_empty());
     }
 
@@ -198,9 +206,9 @@ mod tests {
     fn skip_extra_note() {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (25, 61), (55, 62)]);
-        follower.matches.push(Match::new(0, 0, 1.0));
+        follower.matches.push(Match::new(0, 0, 1.0, 100, 100));
         follower.follow_score(1);
-        assert_eq!(follower.matches[1..], [Match::new(1, 2, 0.5)]);
+        assert_eq!(follower.matches[1..], [Match::new(1, 2, 0.5, 100, 100)]);
         assert_eq!(follower.ignored, vec![1]);
     }
 
@@ -208,9 +216,9 @@ mod tests {
     fn skip_missing_note() {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 64)]);
-        follower.matches.push(Match::new(0, 0, 1.0));
+        follower.matches.push(Match::new(0, 0, 1.0, 100, 100));
         follower.follow_score(1);
-        assert_eq!(follower.matches[1..], [Match::new(2, 1, 0.25)]);
+        assert_eq!(follower.matches[1..], [Match::new(2, 1, 0.25, 100, 100)]);
         assert!(follower.ignored.is_empty());
     }
 
@@ -218,7 +226,7 @@ mod tests {
     fn only_wrong_notes() {
         let mut follower = HomophonoPedantic::new(&*TEST_SCORE);
         follower.live.extend(notes![(5, 60), (55, 63), (105, 66)]);
-        follower.matches.push(Match::new(0, 0, 1.0));
+        follower.matches.push(Match::new(0, 0, 1.0, 100, 100));
         follower.follow_score(1);
         assert!(follower.matches[1..].is_empty());
         assert_eq!(follower.ignored, vec![1, 2]);

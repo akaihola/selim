@@ -37,17 +37,20 @@ fn duration_since_unix_epoch() -> Duration {
         .expect("System clock error")
 }
 
-fn callback(_microsecond: u64, message: &[u8], tx: &mut Sender<ScoreNote>) {
+fn callback(_microsecond: u64, message: &[u8], tx: &mut Sender<(Duration, [u8; 3])>) {
+    let t = duration_since_unix_epoch();
     let event = LiveEvent::parse(message).expect("Unparseable MIDI message");
     if let Midi {
         channel: _,
-        message: NoteOn { key, vel: _ },
+        message: NoteOn { key: _, vel: _ },
     } = event
     {
-        tx.send(ScoreNote {
-            time: duration_since_unix_epoch(),
-            pitch: key,
-        })
+        tx.send((
+            t,
+            message
+                .try_into()
+                .expect("Can't convert MIDI message to array"),
+        ))
         .expect("Can't pass on a MIDI message in the internal channel");
     }
 }
@@ -101,15 +104,27 @@ fn run(
             return Ok(());
         }
         select! {
-            recv(midi_input.rx) -> note_result => {
-                let note = note_result?;
-                follower.push_live(note);
-                let new_matches_offset = follower.matches.len();
-                let new_ignored_offset = follower.ignored.len();
-                follower.follow_score(new_live_index);
-                print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
-                new_live_index = follower.live.len();
-                play = true;
+            recv(midi_input.rx) -> msg => {
+                if let Ok((t, message)) = msg {
+                    let event = LiveEvent::parse(&message).expect("Unparseable MIDI message");
+                    if let Midi {
+                        channel: _,
+                        message: NoteOn { key, vel },
+                    } = event {
+                        let note = ScoreNote {
+                            time: t,
+                            pitch: key,
+                            velocity: vel,
+                        };
+                        follower.push_live(note);
+                        let new_matches_offset = follower.matches.len();
+                        let new_ignored_offset = follower.ignored.len();
+                        follower.follow_score(new_live_index);
+                        print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
+                        new_live_index = follower.live.len();
+                        play = true;
+                    }
+                }
             },
             recv(after(score_wait)) -> _ => {
                 play = true;
@@ -161,7 +176,7 @@ fn play_next(
     let dt = t - t_prev;
     let dts = stretch(dt, 1.0 / k);
     let ts = ts_prev + dts;
-    let (buf, new_head) = play_past_moments(playback_score, head, ts)?;
+    let (buf, new_head) = play_past_moments(playback_score, head, ts, prev_match.live_velocity)?;
     let dt_next = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
@@ -182,6 +197,8 @@ fn print_expect(expect_score: &[ScoreNote], prev_match: &Option<&Match>) {
             score_index,
             live_index: _,
             stretch_factor: _,
+            score_velocity: _,
+            live_velocity: _,
         }) => score_index + 1,
         _ => 0,
     };

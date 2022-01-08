@@ -15,14 +15,24 @@ pub struct Match {
     pub score_index: usize,
     pub live_index: usize,
     pub stretch_factor: f32,
+    pub score_velocity: u7,
+    pub live_velocity: u7,
 }
 
 impl Match {
-    pub fn new(score_index: usize, live_index: usize, stretch_factor: f32) -> Self {
+    pub fn new(
+        score_index: usize,
+        live_index: usize,
+        stretch_factor: f32,
+        score_velocity: u8,
+        live_velocity: u8,
+    ) -> Self {
         Self {
             score_index,
             live_index,
             stretch_factor,
+            score_velocity: u7::from(score_velocity),
+            live_velocity: u7::from(live_velocity),
         }
     }
 }

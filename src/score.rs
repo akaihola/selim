@@ -12,6 +12,7 @@ use std::{path::Path, str::FromStr, time::Duration};
 pub struct ScoreNote {
     pub time: Duration,
     pub pitch: u7,
+    pub velocity: u7,
 }
 
 pub struct ScoreEvent<'a> {
@@ -61,7 +62,7 @@ macro_rules! notes {
     (
         $( ($t: expr, $p: expr) ),+
     ) => {
-        [ $( ScoreNote {time: Duration::from_millis($t), pitch: u7::from($p)} ),+ ]
+        [ $( ScoreNote {time: Duration::from_millis($t), pitch: u7::from($p), velocity: u7::from(127)} ),+ ]
     }
 }
 
@@ -120,7 +121,7 @@ pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEven
         .collect()
 }
 
-const ZERO_U7: u7 = u7::new(0);
+pub const ZERO_U7: u7 = u7::new(0);
 
 pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<ScoreNote> {
     let raw = load_midi_file(path, channels);
@@ -136,10 +137,11 @@ pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<Scor
             } => None,
             Midi {
                 channel: _,
-                message: NoteOn { key, vel: _ },
+                message: NoteOn { key, vel },
             } => Some(ScoreNote {
                 time: *time,
                 pitch: *key,
+                velocity: *vel,
             }),
             _ => None,
         })

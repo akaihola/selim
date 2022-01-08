@@ -1,7 +1,6 @@
-use crate::score::ScoreNote;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use midir::{Ignore, MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
-use std::{any::TypeId, error::Error, fmt::Display};
+use std::{any::TypeId, error::Error, fmt::Display, time::Duration};
 
 pub enum DeviceSelector {
     Number(usize),
@@ -75,19 +74,19 @@ where
 }
 
 pub struct MInput {
-    _connection: MidiInputConnection<Sender<ScoreNote>>,
-    pub rx: Receiver<ScoreNote>,
+    _connection: MidiInputConnection<Sender<(Duration, [u8; 3])>>,
+    pub rx: Receiver<(Duration, [u8; 3])>,
 }
 
 pub fn open_midi_input<F>(device: DeviceSelector, callback: F) -> Result<MInput, Box<dyn Error>>
 where
-    F: Fn(u64, &[u8], &mut Sender<ScoreNote>) + std::marker::Send + 'static,
+    F: Fn(u64, &[u8], &mut Sender<(Duration, [u8; 3])>) + std::marker::Send + 'static,
 {
     let mut midi_input = MidiInput::new("selim")?;
     midi_input.ignore(Ignore::All);
     let in_port = find_port(&midi_input, device)?;
     let in_port_name = midi_input.port_name(&in_port)?;
-    let (tx, rx) = unbounded::<ScoreNote>();
+    let (tx, rx) = unbounded();
     let _connection = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
     eprintln!(
         "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",

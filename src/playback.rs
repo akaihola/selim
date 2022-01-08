@@ -1,6 +1,6 @@
-use crate::score::{pitch_to_name, ScoreEvent};
-use midly::MidiMessage::NoteOn;
+use crate::score::{pitch_to_name, ScoreEvent, ZERO_U7};
 use midly::TrackEventKind;
+use midly::{num::u7, MidiMessage::NoteOn};
 use nodi::Event;
 use std::{error::Error, time::Duration};
 
@@ -10,6 +10,7 @@ pub fn play_past_moments(
     score: &[ScoreEvent],
     head: usize,
     score_calculated_moment: Duration,
+    velocity: u7,
 ) -> Result<(MidiMessages, usize), Box<dyn Error>> {
     let moment_to_play = score[head].time;
     let mut head = head;
@@ -36,7 +37,7 @@ pub fn play_past_moments(
                     vel.as_int(),
                 );
             }
-            if let Some(midi_data) = encode_midi_event(score_event)? {
+            if let Some(midi_data) = encode_midi_event(score_event, velocity)? {
                 buf.push(midi_data);
             }
             head += 1;
@@ -45,12 +46,29 @@ pub fn play_past_moments(
     Ok((buf, head))
 }
 
-pub fn encode_midi_event(event: &ScoreEvent) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
+pub fn encode_midi_event(
+    event: &ScoreEvent,
+    velocity: u7,
+) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
     if let TrackEventKind::Midi { .. } = event.message {
         let ev = Event::try_from(event.message)?;
         if let Event::Midi(midi_event) = ev {
+            let rme = match midi_event.message {
+                NoteOn {
+                    key: _,
+                    vel: ZERO_U7,
+                } => midi_event,
+                NoteOn { key, vel: _ } => {
+                    eprintln!("Velocity {}", velocity.as_int());
+                    nodi::MidiEvent {
+                        channel: midi_event.channel,
+                        message: NoteOn { key, vel: velocity },
+                    }
+                }
+                _ => midi_event,
+            };
             let mut message = Vec::with_capacity(4);
-            let _ = midi_event.write(&mut message);
+            let _ = rme.write(&mut message);
             return Ok(Some(message));
         }
     }
