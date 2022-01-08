@@ -1,5 +1,5 @@
 use crate::{device::DeviceSelector, score::Channels};
-use std::path::PathBuf;
+use std::{num::ParseIntError, path::PathBuf, time::Duration};
 
 use structopt::StructOpt;
 
@@ -30,6 +30,13 @@ pub struct Cli {
         conflicts_with = "rec_device_num"
     )]
     pub play_device_name: Option<String>,
+    #[structopt(
+        short = "d",
+        long = "delay",
+        parse(try_from_str = parse_duration),
+        default_value="0",
+    )]
+    pub delay: Duration,
     #[structopt(short = "i", long = "--input-score-file", parse(from_os_str))]
     pub input_score_file: PathBuf,
     #[structopt(short = "c", long = "--input-channels")]
@@ -38,6 +45,11 @@ pub struct Cli {
     pub output_channels: Vec<Channels>,
     #[structopt(short = "o", long = "--playback-score-file", parse(from_os_str))]
     pub playback_score_file: PathBuf,
+}
+
+fn parse_duration(src: &str) -> Result<Duration, ParseIntError> {
+    let millis = src.parse()?;
+    Ok(Duration::from_millis(millis))
 }
 
 pub fn parse_args() -> (Cli, DeviceSelector, DeviceSelector) {

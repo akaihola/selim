@@ -25,6 +25,7 @@ fn main() {
         playback_device,
         input_score,
         playback_score,
+        args.delay,
         caught_ctrl_c,
     ) {
         eprintln!("Error: {}", err)
@@ -60,6 +61,7 @@ fn run(
     playback_device: DeviceSelector,
     expect_score: Vec<ScoreNote>,
     playback_score: Vec<ScoreEvent>,
+    delay: Duration,
     caught_ctrl_c: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn Error>> {
     assert!(!expect_score.is_empty());
@@ -88,6 +90,7 @@ fn run(
                     playback_head,
                     &follower.matches,
                     t,
+                    delay,
                 )?;
                 buf.extend(midi_data);
                 playback_head = _new_playback_head;
@@ -150,6 +153,7 @@ fn play_next(
     head: usize, // index of next score note to be played
     matches: &[Match],
     t: Duration, // system time since Unix Epoch
+    delay: Duration,
 ) -> Result<(MidiMessages, usize, Duration), Box<dyn Error>> {
     if head >= playback_score.len() {
         // The playback score has reached end. Only react to live notes from now on.
@@ -174,7 +178,7 @@ fn play_next(
     let ts_prev = expect_score[prev_match.score_index].time;
     let k = prev_match.stretch_factor;
     let dt = t - t_prev;
-    let dts = stretch(dt, 1.0 / k);
+    let dts = stretch(dt + delay, 1.0 / k);
     let ts = ts_prev + dts;
     let (buf, new_head) = play_past_moments(playback_score, head, ts, prev_match.live_velocity)?;
     let dt_next = if new_head >= playback_score.len() {
