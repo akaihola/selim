@@ -21,13 +21,13 @@ pub struct Cli {
     #[structopt(
         short = "p",
         long = "play-device-num",
-        conflicts_with = "rec_device_name"
+        conflicts_with = "play_device_name"
     )]
     pub play_device_num: Option<usize>,
     #[structopt(
         short = "P",
         long = "play-device-name",
-        conflicts_with = "rec_device_num"
+        conflicts_with = "play_device_num"
     )]
     pub play_device_name: Option<String>,
     #[structopt(
