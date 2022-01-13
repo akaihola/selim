@@ -7,6 +7,8 @@ use midly::{
 use once_cell::sync::Lazy;
 use std::{path::Path, str::FromStr, time::Duration};
 
+use crate::ScoreVec;
+
 /// A note with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreNote {
@@ -62,7 +64,7 @@ macro_rules! notes {
     (
         $( ($t: expr, $p: expr) ),+
     ) => {
-        [ $( ScoreNote {time: Duration::from_millis($t), pitch: u7::from($p), velocity: u7::from(127)} ),+ ]
+        index_vec::index_vec![ $( ScoreNote {time: Duration::from_millis($t), pitch: u7::from($p), velocity: u7::from(127)} ),+ ]
     }
 }
 
@@ -123,7 +125,7 @@ pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEven
 
 pub const ZERO_U7: u7 = u7::new(0);
 
-pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> Vec<ScoreNote> {
+pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> ScoreVec {
     let raw = load_midi_file(path, channels);
     raw.iter()
         .filter_map(|ScoreEvent { time, message }| match message {
@@ -225,8 +227,8 @@ mod tests {
         let score = load_midi_file_note_ons(&path, vec![]);
         assert_eq!(score.len(), 666);
         assert_eq!(
-            score[..5],
-            notes![(0, 48), (0, 72), (500, 76), (750, 72), (1000, 67)]
+            score[..5.into()],
+            notes![(0, 48), (0, 72), (500, 76), (750, 72), (1000, 67)][..]
         );
     }
 
@@ -236,8 +238,8 @@ mod tests {
         let score = load_midi_file_note_ons(&path, vec![chnls!(1, vec![0])]);
         assert_eq!(score.len(), 454);
         assert_eq!(
-            score[..5],
-            notes![(0, 72), (500, 76), (750, 72), (1000, 67), (1500, 67)]
+            score[..5.into()],
+            notes![(0, 72), (500, 76), (750, 72), (1000, 67), (1500, 67)][..]
         );
     }
 

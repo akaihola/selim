@@ -1,18 +1,24 @@
 use crossbeam_channel::{after, select, Sender};
-use midly::live::{LiveEvent, LiveEvent::Midi};
-use midly::MidiMessage::NoteOn;
-use selim::algo01_homophonopedantic::{HomophonoPedantic, ScoreFollower};
-use selim::cleanup::{attach_ctrl_c_handler, handle_ctrl_c};
-use selim::cmdline::parse_args;
-use selim::device::{open_midi_input, open_midi_output, DeviceSelector};
-use selim::playback::{play_past_moments, MidiMessages};
-use selim::score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote};
-use selim::Match;
-use std::boxed::Box;
-use std::error::Error;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use midly::{
+    live::{LiveEvent, LiveEvent::Midi},
+    MidiMessage::NoteOn,
+};
+use selim::{
+    algo01_homophonopedantic::MatchPerScore,
+    algo02_polyphonoflex::PolyphonoFlex,
+    cleanup::{attach_ctrl_c_handler, handle_ctrl_c},
+    cmdline::parse_args,
+    device::{open_midi_input, open_midi_output, DeviceSelector},
+    playback::{play_past_moments, MidiMessages},
+    score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote},
+    stretch, LiveIdx, LiveVec, Match, ScoreFollower, ScoreNoteIdx, ScoreVec,
+};
+use std::{
+    boxed::Box,
+    error::Error,
+    sync::{atomic::AtomicBool, Arc},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 fn main() {
     let caught_ctrl_c = attach_ctrl_c_handler();
@@ -59,7 +65,7 @@ fn callback(_microsecond: u64, message: &[u8], tx: &mut Sender<(Duration, [u8; 3
 fn run(
     input_device: DeviceSelector,
     playback_device: DeviceSelector,
-    expect_score: Vec<ScoreNote>,
+    expect_score: ScoreVec,
     playback_score: Vec<ScoreEvent>,
     delay: Duration,
     caught_ctrl_c: Arc<AtomicBool>,
@@ -69,10 +75,11 @@ fn run(
     let midi_input = open_midi_input(input_device, callback)?;
     let mut conn_out = open_midi_output(playback_device)?;
 
-    let mut new_live_index = 0;
+    let mut new_live_index = 0.into();
     let mut playback_head = 0;
     let mut score_wait = Duration::from_secs(1);
-    let mut follower = HomophonoPedantic::new(&expect_score);
+    // let mut follower = HomophonoPedantic::new(&expect_score);
+    let mut follower = PolyphonoFlex::new(&expect_score);
     let mut buf = MidiMessages::new();
     let mut play = false;
     let mut quit = false;
@@ -88,7 +95,7 @@ fn run(
                     &follower.live,
                     &playback_score,
                     playback_head,
-                    &follower.matches,
+                    &follower.matches_slice(..),
                     t,
                     delay,
                 )?;
@@ -107,6 +114,12 @@ fn run(
             return Ok(());
         }
         select! {
+            recv(after(Duration::from_millis(1000))) -> _ => {
+                if let Some(midi_reset) = handle_ctrl_c(&caught_ctrl_c) {
+                    buf.extend(midi_reset);
+                    quit = true;
+                }
+            },
             recv(midi_input.rx) -> msg => {
                 if let Ok((t, message)) = msg {
                     let event = LiveEvent::parse(&message).expect("Unparseable MIDI message");
@@ -122,9 +135,9 @@ fn run(
                         follower.push_live(note);
                         let new_matches_offset = follower.matches.len();
                         let new_ignored_offset = follower.ignored.len();
-                        follower.follow_score(new_live_index);
-                        print_got(&follower.live, note, &follower.matches[new_matches_offset..], &follower.ignored[new_ignored_offset..]);
-                        new_live_index = follower.live.len();
+                        follower.follow_score(new_live_index)?;
+                        print_got(&follower.live, note, &follower.matches_slice(new_matches_offset..), follower.ignored[new_ignored_offset.into()..].as_raw_slice());
+                        new_live_index = follower.live.len().into();
                         play = true;
                     }
                 }
@@ -132,26 +145,16 @@ fn run(
             recv(after(score_wait)) -> _ => {
                 play = true;
             },
-            recv(after(Duration::from_millis(1000))) -> _ => {
-                if let Some(midi_reset) = handle_ctrl_c(&caught_ctrl_c) {
-                    buf.extend(midi_reset);
-                    quit = true;
-                }
-            },
         };
     }
 }
 
-fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
-    duration * (1000.0 * stretch_factor) as u32 / 1000
-}
-
 fn play_next(
-    expect_score: &[ScoreNote],
-    live: &[ScoreNote],
+    expect_score: &ScoreVec,
+    live: &LiveVec,
     playback_score: &[ScoreEvent],
     head: usize, // index of next score note to be played
-    matches: &[Match],
+    matches: &[MatchPerScore],
     t: Duration, // system time since Unix Epoch
     delay: Duration,
 ) -> Result<(MidiMessages, usize, Duration), Box<dyn Error>> {
@@ -174,13 +177,13 @@ fn play_next(
     let prev_match = matches
         .last()
         .expect("play_next() needs a non-empty list of matches");
-    let t_prev = live[prev_match.live_index].time;
-    let ts_prev = expect_score[prev_match.score_index].time;
-    let k = prev_match.stretch_factor;
+    let t_prev = prev_match.live_time(live)?;
+    let ts_prev = prev_match.score_time(expect_score)?;
+    let k = prev_match.stretch_factor();
     let dt = t - t_prev;
     let dts = stretch(dt + delay, 1.0 / k);
     let ts = ts_prev + dts;
-    let (buf, new_head) = play_past_moments(playback_score, head, ts, prev_match.live_velocity)?;
+    let (buf, new_head) = play_past_moments(playback_score, head, ts, prev_match.live_velocity())?;
     let dt_next = if new_head >= playback_score.len() {
         Duration::from_secs(1)
     } else {
@@ -195,42 +198,41 @@ fn play_next(
     Ok((buf, new_head, dt_next))
 }
 
-fn print_expect(expect_score: &[ScoreNote], prev_match: &Option<&Match>) {
-    let score_next = match prev_match {
-        Some(Match {
-            score_index,
-            live_index: _,
-            stretch_factor: _,
-            score_velocity: _,
-            live_velocity: _,
-        }) => score_index + 1,
-        _ => 0,
+fn print_expect(expect_score: &ScoreVec, prev_match: &Option<MatchPerScore>) {
+    let score_next: ScoreNoteIdx = match prev_match {
+        Some(m) => m.score_index() + ScoreNoteIdx::from(1),
+        _ => 0.into(),
     };
     if score_next < expect_score.len() {
         println!(
             "score {:>3} {:>7.3} expect {}",
-            score_next,
+            usize::from(score_next),
             expect_score[score_next].time.as_secs_f32(),
             pitch_to_name(expect_score[score_next].pitch),
         );
     }
 }
 
-fn print_got(live: &[ScoreNote], note: ScoreNote, new_matches: &[Match], ignored: &[usize]) {
-    println!(
-        " live {:>3} {:>7.3}    got {} -> {:?} {:?}",
-        live.len() - 1,
-        note.time.as_secs_f32(),
-        pitch_to_name(note.pitch),
-        new_matches
-            .iter()
-            .map(|m| {
-                format!(
-                    "{}->{} {}",
-                    m.live_index, m.score_index, live[m.live_index].pitch
-                )
-            })
-            .collect::<Vec<_>>(),
-        ignored
-    );
+fn print_got(
+    live: &LiveVec,
+    _note: ScoreNote,
+    new_matches: &[MatchPerScore],
+    _ignored: &[LiveIdx],
+) {
+    for (_i, new_match) in new_matches.iter().enumerate() {
+        let pitch_name = new_match
+            .live_pitch(live)
+            .map_or("<Err>".to_string(), pitch_to_name);
+        eprintln!(
+            " live {}/{:.3} {} vel{} -> {}[{}] vel{}, {:.0}%",
+            usize::from(new_match.live_index()),
+            new_match.live_time(live).unwrap().as_secs_f32(),
+            &pitch_name,
+            new_match.live_velocity(),
+            &pitch_name,
+            usize::from(new_match.score_index()),
+            new_match.score_velocity(),
+            100.0 * new_match.stretch_factor(),
+        );
+    }
 }
