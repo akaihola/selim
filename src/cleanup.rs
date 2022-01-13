@@ -3,10 +3,7 @@ use std::sync::{
     Arc,
 };
 
-use midly::{
-    live::LiveEvent,
-    num::{u4, u7},
-};
+use midly::{live::LiveEvent, num::u4};
 
 pub fn attach_ctrl_c_handler() -> Arc<AtomicBool> {
     // Attach interrupt handler to catch ctrl-c

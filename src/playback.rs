@@ -1,6 +1,5 @@
 use crate::score::{pitch_to_name, ScoreEvent, ZERO_U7};
-use midly::TrackEventKind;
-use midly::{num::u7, MidiMessage::NoteOn};
+use midly::{num::u7, MidiMessage::NoteOn, TrackEventKind};
 use nodi::Event;
 use std::{error::Error, time::Duration};
 

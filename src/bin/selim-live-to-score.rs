@@ -1,10 +1,10 @@
 use midir::{Ignore, MidiInput};
-use midly::live::{LiveEvent, LiveEvent::Midi};
-use midly::MidiMessage::NoteOn;
+use midly::{
+    live::{LiveEvent, LiveEvent::Midi},
+    MidiMessage::NoteOn,
+};
 use selim::device::{find_port, DeviceSelector};
-use std::boxed::Box;
-use std::error::Error;
-use std::io::stdin;
+use std::{boxed::Box, error::Error, io::stdin};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
