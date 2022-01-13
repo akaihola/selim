@@ -24,8 +24,8 @@ pub fn attach_ctrl_c_handler() -> Arc<AtomicBool> {
 pub fn handle_ctrl_c(caught_ctrl_c: &Arc<AtomicBool>) -> Option<[Vec<u8>; 16]> {
     if caught_ctrl_c.load(Ordering::SeqCst) {
         let cc = midly::MidiMessage::Controller {
-            controller: u7::from(120),
-            value: u7::from(0),
+            controller: 120.into(),
+            value: 0.into(),
         };
         let mut buf: [Vec<u8>; 16] = Default::default();
         for channel in 0..16 {
