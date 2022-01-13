@@ -409,26 +409,33 @@ mod tests {
         notes![(1000, 60), (1100, 62), (1200, 64)]
     }
 
+    fn make_follower(score: &ScoreVec, live: LiveVec) -> PolyphonoFlex {
+        let mut follower = PolyphonoFlex::new(score);
+        follower.live.extend::<LiveVec>(live);
+        follower
+    }
+
     #[test]
     fn find_new_matches_the_only_note() {
-        let score = notes![(1000, 60)];
-        let mut follower = PolyphonoFlex::new(&score);
-        follower.live.extend::<LiveVec>(notes![(5, 60)]);
+        let score = &notes![(1000, 60)];
+        let follower = make_follower(score, notes![(5, 60)]);
         let (matches, ignored, match_offsets_by_pitch) =
             follower.find_new_matches(0.into()).unwrap();
         assert_eq!(
             matches,
             index_vec![MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127)]
         );
-        assert_eq!(match_offsets_by_pitch, index_vec![(PitchIdx::from(60u8), MatchIdx::from(0))]);
+        assert_eq!(
+            match_offsets_by_pitch,
+            index_vec![(PitchIdx::from(60u8), MatchIdx::from(0))]
+        );
         assert!(ignored.is_empty());
     }
 
     #[test]
     fn follow_score_the_only_note() {
-        let score = notes![(1000, 60)];
-        let mut follower = PolyphonoFlex::new(&score);
-        follower.live.extend::<LiveVec>(notes![(5, 60)]);
+        let score = &notes![(1000, 60)];
+        let mut follower = make_follower(score, notes![(5, 60)]);
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
@@ -440,9 +447,8 @@ mod tests {
 
     #[test]
     fn match_first() {
-        let score = test_score();
-        let mut follower = PolyphonoFlex::new(&score);
-        follower.live.extend::<LiveVec>(notes![(5, 60)]);
+        let score = &test_score();
+        let mut follower = make_follower(score, notes![(5, 60)]);
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
@@ -454,9 +460,8 @@ mod tests {
 
     #[test]
     fn match_second() {
-        let score = test_score();
-        let mut follower = PolyphonoFlex::new(&score);
-        follower.live.extend::<LiveVec>(notes![(5, 60), (55, 62)]);
+        let score = &test_score();
+        let mut follower = make_follower(score, notes![(5, 60), (55, 62)]);
         follower
             .matches
             .push(MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127));
@@ -472,11 +477,8 @@ mod tests {
 
     #[test]
     fn skip_extra_note() {
-        let score = test_score();
-        let mut follower = PolyphonoFlex::new(&score);
-        follower
-            .live
-            .extend::<LiveVec>(notes![(5, 60), (25, 61), (55, 62)]);
+        let score = &test_score();
+        let mut follower = make_follower(score, notes![(5, 60), (25, 61), (55, 62)]);
         follower.matches.push(MatchPerPitch::new(
             ScoreOffsetIdx::from(0),
             0.into(),
@@ -497,9 +499,8 @@ mod tests {
 
     #[test]
     fn skip_missing_note() {
-        let score = test_score();
-        let mut follower = PolyphonoFlex::new(&score);
-        follower.live.extend::<LiveVec>(notes![(5, 60), (55, 64)]);
+        let score = &test_score();
+        let mut follower = make_follower(score, notes![(5, 60), (55, 64)]);
         follower.matches.push(MatchPerPitch::new(
             ScoreOffsetIdx::from(0),
             0.into(),
@@ -519,11 +520,8 @@ mod tests {
 
     #[test]
     fn only_wrong_notes() {
-        let score = test_score();
-        let mut follower = PolyphonoFlex::new(&score);
-        follower
-            .live
-            .extend::<LiveVec>(notes![(5, 60), (55, 63), (105, 66)]);
+        let score = &test_score();
+        let mut follower = make_follower(score, notes![(5, 60), (55, 63), (105, 66)]);
         follower.matches.push(MatchPerPitch::new(
             ScoreOffsetIdx::from(0),
             0.into(),
