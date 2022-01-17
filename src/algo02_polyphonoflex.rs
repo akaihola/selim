@@ -409,16 +409,31 @@ mod tests {
         notes![(1000, 60), (1100, 62), (1200, 64)]
     }
 
-    fn make_follower(score: &ScoreVec, live: LiveVec) -> PolyphonoFlex {
+    fn make_follower<'a>(
+        score: &'a ScoreVec,
+        live: LiveVec,
+        matches: &'a [(usize, usize, u8)],
+    ) -> PolyphonoFlex<'a> {
         let mut follower = PolyphonoFlex::new(score);
         follower.live.extend::<LiveVec>(live);
+        for (score_per_pitch_index, live_index, pitch) in matches {
+            follower.matches.push(MatchPerPitch::new(
+                (*score_per_pitch_index).into(),
+                (*live_index).into(),
+                1.0,
+                127,
+                127,
+            ));
+            follower.match_offsets_by_pitch[PitchIdx::from(*pitch)]
+                .push((*score_per_pitch_index).into());
+        }
         follower
     }
 
     #[test]
     fn find_new_matches_the_only_note() {
         let score = &notes![(1000, 60)];
-        let follower = make_follower(score, notes![(5, 60)]);
+        let follower = make_follower(score, notes![(5, 60)], &[]);
         let (matches, ignored, match_offsets_by_pitch) =
             follower.find_new_matches(0.into()).unwrap();
         assert_eq!(
@@ -435,7 +450,7 @@ mod tests {
     #[test]
     fn follow_score_the_only_note() {
         let score = &notes![(1000, 60)];
-        let mut follower = make_follower(score, notes![(5, 60)]);
+        let mut follower = make_follower(score, notes![(5, 60)], &[]);
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
@@ -448,7 +463,7 @@ mod tests {
     #[test]
     fn match_first() {
         let score = &test_score();
-        let mut follower = make_follower(score, notes![(5, 60)]);
+        let mut follower = make_follower(score, notes![(5, 60)], &[]);
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
@@ -461,11 +476,7 @@ mod tests {
     #[test]
     fn match_second() {
         let score = &test_score();
-        let mut follower = make_follower(score, notes![(5, 60), (55, 62)]);
-        follower
-            .matches
-            .push(MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127));
-        follower.match_offsets_by_pitch[60].push(0.into());
+        let mut follower = make_follower(score, notes![(5, 60), (55, 62)], &[(0, 0, 60)]);
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
@@ -478,15 +489,7 @@ mod tests {
     #[test]
     fn skip_extra_note() {
         let score = &test_score();
-        let mut follower = make_follower(score, notes![(5, 60), (25, 61), (55, 62)]);
-        follower.matches.push(MatchPerPitch::new(
-            ScoreOffsetIdx::from(0),
-            0.into(),
-            1.0,
-            127,
-            127,
-        ));
-        follower.match_offsets_by_pitch[60].push(0.into());
+        let mut follower = make_follower(score, notes![(5, 60), (25, 61), (55, 62)], &[(0, 0, 60)]);
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
@@ -500,15 +503,7 @@ mod tests {
     #[test]
     fn skip_missing_note() {
         let score = &test_score();
-        let mut follower = make_follower(score, notes![(5, 60), (55, 64)]);
-        follower.matches.push(MatchPerPitch::new(
-            ScoreOffsetIdx::from(0),
-            0.into(),
-            1.0,
-            127,
-            127,
-        ));
-        follower.match_offsets_by_pitch[60].push(0.into());
+        let mut follower = make_follower(score, notes![(5, 60), (55, 64)], &[(0, 0, 60)]);
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
@@ -521,15 +516,8 @@ mod tests {
     #[test]
     fn only_wrong_notes() {
         let score = &test_score();
-        let mut follower = make_follower(score, notes![(5, 60), (55, 63), (105, 66)]);
-        follower.matches.push(MatchPerPitch::new(
-            ScoreOffsetIdx::from(0),
-            0.into(),
-            1.0,
-            127,
-            127,
-        ));
-        follower.match_offsets_by_pitch[60].push(0.into());
+        let mut follower =
+            make_follower(score, notes![(5, 60), (55, 63), (105, 66)], &[(0, 0, 60)]);
         follower.follow_score(1.into()).unwrap();
         assert!(follower.matches[1.into()..].is_empty());
         assert!(follower.match_offsets_by_pitch[63].is_empty());
