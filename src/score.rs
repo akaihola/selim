@@ -2,6 +2,7 @@ use midi_reader_writer::{midly_0_5::merge_tracks, ConvertTicksToMicroseconds};
 use midly::{
     num::{u4, u7},
     MidiMessage::NoteOn,
+    Smf,
     TrackEventKind::{self, Midi},
 };
 use once_cell::sync::Lazy;
@@ -17,6 +18,7 @@ pub struct ScoreNote {
     pub velocity: u7,
 }
 
+/// A midly MIDI message at a given timestamp
 pub struct ScoreEvent<'a> {
     pub time: Duration,
     pub message: TrackEventKind<'a>,
@@ -96,38 +98,53 @@ fn make_tracks_and_channels_index(
     track_channels
 }
 
-pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEvent<'a>> {
-    let data = std::fs::read(path).unwrap();
-    let smf = midly::Smf::parse(&data).unwrap();
+pub fn smf_to_events<'a>(smf: &Smf, channels: Vec<Channels>) -> Vec<ScoreEvent<'a>> {
     let mut ticks_to_microseconds = ConvertTicksToMicroseconds::try_from(smf.header).unwrap();
-    let track_channels = make_tracks_and_channels_index(channels, smf.tracks.len());
+    let selected_channels_by_track = make_tracks_and_channels_index(channels, smf.tracks.len());
     merge_tracks(&smf.tracks)
         .filter_map(|(ticks, track_index, event)| {
-            match (track_channels[track_index].len(), event) {
-                (0, _) => None,
+            let selected_channels = &selected_channels_by_track[track_index];
+            match (selected_channels.len(), event) {
+                (0, _) => None, // no MIDI channels to include from this track
                 (_, Midi { channel, message }) => {
-                    if track_channels[track_index].contains(&channel) {
+                    // at least one MIDI channel to include from this track, and the event is a MIDI message
+                    // -> consider the event
+                    if selected_channels.contains(&channel) {
+                        // event is on a MIDI channel which should be included or this track
+                        // -> include the event
                         Some(ScoreEvent {
                             time: Duration::from_micros(
                                 ticks_to_microseconds.convert(ticks, &event),
                             ),
+                            // Make a copy of the MIDI message so we don't include references to data in `smf`
                             message: Midi { channel, message },
                         })
                     } else {
+                        // event is on a MIDI channel which should be exluded on this track
+                        // -> skip the event
                         None
                     }
                 }
+                // event is not a MIDI message, skip it
                 _ => None,
             }
         })
         .collect()
 }
 
+/// Loads a MIDI SMF file and joins events on all chosen channels of selected tracks
+/// into a single list of MIDI events with timestamps
+pub fn load_midi_file<'a>(path: &Path, channels: Vec<Channels>) -> Vec<ScoreEvent<'a>> {
+    let data = std::fs::read(path).unwrap();
+    let smf = midly::Smf::parse(&data).unwrap();
+    smf_to_events(&smf, channels)
+}
+
 pub const ZERO_U7: u7 = u7::new(0);
 
-pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> ScoreVec {
-    let raw = load_midi_file(path, channels);
-    raw.iter()
+pub fn convert_midi_note_ons(events: Vec<ScoreEvent>) -> ScoreVec {
+    events
+        .iter()
         .filter_map(|ScoreEvent { time, message }| match message {
             Midi {
                 channel: _,
@@ -148,6 +165,13 @@ pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> ScoreVec
             _ => None,
         })
         .collect()
+}
+
+/// Loads a MIDI SMF file and joins events on all chosen channels of selected tracks
+/// into a single list of MIDI events with timestamps in a Selim `ScoreVec`
+pub fn load_midi_file_note_ons(path: &Path, channels: Vec<Channels>) -> ScoreVec {
+    let raw = load_midi_file(path, channels);
+    convert_midi_note_ons(raw)
 }
 
 const NOTE_NAMES: [&str; 12] = [
