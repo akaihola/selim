@@ -212,8 +212,8 @@ impl HomophonoPedantic {
         new_live_index: LiveIdx,
     ) -> (MatchVec<MatchPerScore>, LiveOffsetVec) {
         let mut score_pointer = match self.last_match() {
-            Some(i) => i.score_index() + 1, // continue in the score just after last previous match, or
-            None => 0.into(),             // start from beginning of score if nothing matched yet
+            Some(i) => i.score_index() + 1, // continue in the score just after last previous
+            None => 0.into(), // match, or start from beginning of score if nothing matched yet
         };
         let mut matches: MatchVec<MatchPerScore> = index_vec![];
         let mut ignored: LiveOffsetVec = index_vec![];
