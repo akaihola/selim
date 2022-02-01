@@ -71,3 +71,7 @@ fn get_stretch_factor(elapsed_score: Duration, elapsed_live: Duration) -> f32 {
 pub fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
     duration * (1000.0 * stretch_factor) as u32 / 1000
 }
+
+#[cfg(test)]
+
+mod test_helpers;

@@ -412,6 +412,7 @@ mod tests {
     use super::*;
     use crate::{
         score::{convert_midi_note_ons, smf_to_events},
+        test_helpers::ignore_vel,
         ScoreVec,
     };
     extern crate abc_parser;
@@ -435,7 +436,10 @@ mod tests {
     fn test_abc_into_score() {
         let music = "X: 1\nT: test_abc_into_score\nK: C\nCDE\n";
         let score = abc_into_score(music);
-        assert_eq!(&score, &notes![(0, 60), (41666, 62), (83333, 64)]);
+        assert_eq!(
+            &ignore_vel(score),
+            &notes![(0, 60), (41666, 62), (83333, 64)]
+        );
     }
 
     fn make_follower<'a>(
@@ -450,8 +454,8 @@ mod tests {
                 (*score_per_pitch_index).into(),
                 (*live_index).into(),
                 1.0,
-                127,
-                127,
+                100,
+                100,
             ));
             follower.match_offsets_by_pitch[PitchIdx::from(*pitch)]
                 .push((*score_per_pitch_index).into());
@@ -467,7 +471,7 @@ mod tests {
             follower.find_new_matches(0.into()).unwrap();
         assert_eq!(
             matches,
-            index_vec![MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127)]
+            index_vec![MatchPerPitch::new(0.into(), 0.into(), 1.0, 100, 100)]
         );
         assert_eq!(
             match_offsets_by_pitch,
@@ -483,7 +487,7 @@ mod tests {
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
-            index_vec![MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127)]
+            index_vec![MatchPerPitch::new(0.into(), 0.into(), 1.0, 100, 100)]
         );
         assert_eq!(follower.match_offsets_by_pitch[60], [0]);
         assert!(follower.ignored.is_empty());
@@ -496,7 +500,7 @@ mod tests {
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
-            [MatchPerPitch::new(0.into(), 0.into(), 1.0, 127, 127)]
+            [MatchPerPitch::new(0.into(), 0.into(), 1.0, 100, 100)]
         );
         assert_eq!(follower.match_offsets_by_pitch[60], [0]);
         assert!(follower.ignored.is_empty());
@@ -509,7 +513,7 @@ mod tests {
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerPitch::new(0.into(), 1.into(), 0.5, 127, 127)]
+            [MatchPerPitch::new(0.into(), 1.into(), 0.5, 100, 100)]
         );
         assert_eq!(follower.match_offsets_by_pitch[62], [1]);
         assert!(follower.ignored.is_empty());
@@ -522,7 +526,7 @@ mod tests {
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerPitch::new(0.into(), 2.into(), 0.5, 127, 127)]
+            [MatchPerPitch::new(0.into(), 2.into(), 0.5, 100, 100)]
         );
         assert!(follower.match_offsets_by_pitch[61].is_empty());
         assert_eq!(follower.match_offsets_by_pitch[62], [1]);
@@ -536,7 +540,7 @@ mod tests {
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerPitch::new(0.into(), 1.into(), 0.25, 127, 127)]
+            [MatchPerPitch::new(0.into(), 1.into(), 0.25, 100, 100)]
         );
         assert_eq!(follower.match_offsets_by_pitch[64], [1]);
         assert!(follower.ignored.is_empty());

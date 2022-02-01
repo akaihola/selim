@@ -286,7 +286,7 @@ mod tests {
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
-            [MatchPerScore::new(0.into(), 0.into(), 1.0, 127, 127)]
+            [MatchPerScore::new(0.into(), 0.into(), 1.0, 100, 100)]
         );
         assert!(follower.ignored.is_empty());
     }
@@ -298,7 +298,7 @@ mod tests {
         follower.follow_score(0.into()).unwrap();
         assert_eq!(
             follower.matches,
-            [MatchPerScore::new(0.into(), 0.into(), 1.0, 127, 127)]
+            [MatchPerScore::new(0.into(), 0.into(), 1.0, 100, 100)]
         );
         assert!(follower.ignored.is_empty());
     }
@@ -309,11 +309,11 @@ mod tests {
         follower.live.extend::<LiveVec>(notes![(5, 60), (55, 62)]);
         follower
             .matches
-            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 127, 127));
+            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 100, 100));
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerScore::new(1.into(), 1.into(), 0.5, 127, 127)]
+            [MatchPerScore::new(1.into(), 1.into(), 0.5, 100, 100)]
         );
         assert!(follower.ignored.is_empty());
     }
@@ -326,11 +326,11 @@ mod tests {
             .extend::<LiveVec>(notes![(5, 60), (25, 61), (55, 62)]);
         follower
             .matches
-            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 127, 127));
+            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 100, 100));
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerScore::new(1.into(), 2.into(), 0.5, 127, 127)]
+            [MatchPerScore::new(1.into(), 2.into(), 0.5, 100, 100)]
         );
         assert_eq!(follower.ignored, vec![1]);
     }
@@ -341,11 +341,11 @@ mod tests {
         follower.live.extend::<LiveVec>(notes![(5, 60), (55, 64)]);
         follower
             .matches
-            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 127, 127));
+            .push(MatchPerScore::new(0.into(), 0.into(), 1.0, 100, 100));
         follower.follow_score(1.into()).unwrap();
         assert_eq!(
             follower.matches[1.into()..],
-            [MatchPerScore::new(2.into(), 1.into(), 0.25, 127, 127)]
+            [MatchPerScore::new(2.into(), 1.into(), 0.25, 100, 100)]
         );
         assert!(follower.ignored.is_empty());
     }
