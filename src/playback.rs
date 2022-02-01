@@ -29,8 +29,7 @@ pub fn play_past_moments(
             } = score_event.message
             {
                 println!(
-                    "Play score {}: {:.3}, {} {}",
-                    head,
+                    "Play score {head}: {:.3}, {} {}",
                     score_event.time.as_secs_f32(),
                     pitch_to_name(key),
                     vel.as_int(),

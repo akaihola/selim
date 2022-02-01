@@ -34,7 +34,7 @@ fn main() {
         args.delay,
         caught_ctrl_c,
     ) {
-        eprintln!("Error: {}", err)
+        eprintln!("Error: {err}")
     }
 }
 

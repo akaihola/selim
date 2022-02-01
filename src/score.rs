@@ -36,20 +36,20 @@ impl FromStr for Channels {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.rsplitn(2, ':');
         let midi_channels: Result<Vec<u4>, _> = match parts.next() {
-            Some(m) => {
-                m.split(',')
-                    .map(|c| match c.trim().parse::<u8>() {
-                        Ok(n) => u4::try_from(n - 1)
-                            .ok_or(format!("Invalid MIDI channel number '{}'", c)),
-                        Err(_) => Err(format!("Invalid MIDI channel number '{}'", c)),
-                    })
-                    .collect()
-            }
-            None => return Err(format!("Can't parse MIDI channels list from '{}'", s)),
+            Some(m) => m
+                .split(',')
+                .map(|c| match c.trim().parse::<u8>() {
+                    Ok(n) => {
+                        u4::try_from(n - 1).ok_or(format!("Invalid MIDI channel number '{c}'"))
+                    }
+                    Err(_) => Err(format!("Invalid MIDI channel number '{c}'")),
+                })
+                .collect(),
+            None => return Err(format!("Can't parse MIDI channels list from '{s}'")),
         };
         let track: Result<usize, _> = match parts.next().map(|p| (p, p.trim().parse::<usize>())) {
             Some((_, Ok(0))) => Err(String::from("Invalid track number '0'")),
-            Some((p, t)) => t.map_err(|_| format!("Invalid track number '{}'", p)),
+            Some((p, t)) => t.map_err(|_| format!("Invalid track number '{p}'")),
             None => Ok(1),
         };
         Ok(Channels {
@@ -178,7 +178,7 @@ pub fn pitch_to_name(pitch: u7) -> String {
         false => NOTE_NAMES[pitch_class],
         true => NOTE_NAMES_LOWER[pitch_class],
     };
-    format!("{}{}", pitch_symbol, octave)
+    format!("{pitch_symbol}{octave}")
 }
 
 #[cfg(test)]

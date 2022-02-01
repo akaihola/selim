@@ -10,8 +10,8 @@ pub enum DeviceSelector {
 impl Display for DeviceSelector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DeviceSelector::Number(n) => f.write_fmt(format_args!("{}", n)),
-            DeviceSelector::NameSubstring(data) => f.write_fmt(format_args!("\"{}\"", data)),
+            DeviceSelector::Number(n) => f.write_fmt(format_args!("{n}")),
+            DeviceSelector::NameSubstring(data) => f.write_fmt(format_args!("\"{data}\"")),
         }
     }
 }
@@ -46,20 +46,14 @@ where
     let direction = get_midi_io_direction(midi_io);
     if matches.is_empty() {
         print_ports(ports, midi_io, direction);
-        return Err(format!("No MIDI {} port matching {}", direction, device));
+        return Err(format!("No MIDI {direction} port matching {device}"));
     } else if matches.len() > 1 {
         print_ports(ports, midi_io, direction);
-        return Err(format!(
-            "Multiple MIDI {} ports matching {}",
-            direction, device
-        ));
+        return Err(format!("Multiple MIDI {direction} ports matching {device}"));
     };
 
     let (device_number, port_name) = matches[0].clone();
-    eprintln!(
-        "Selecting MIDI {} port {}: {}",
-        direction, device_number, port_name
-    );
+    eprintln!("Selecting MIDI {direction} port {device_number}: {port_name}");
     Ok(ports[device_number].clone())
 }
 
@@ -69,7 +63,7 @@ where
 {
     eprintln!("Found {} ports:", direction);
     for (i, port) in ports.iter().enumerate() {
-        eprintln!("{}: {}", i, midi_io.port_name(port).unwrap())
+        eprintln!("{i}: {}", midi_io.port_name(port).unwrap())
     }
 }
 
@@ -88,10 +82,7 @@ where
     let in_port_name = midi_input.port_name(&in_port)?;
     let (tx, rx) = unbounded();
     let _connection = midi_input.connect(&in_port, "selim-live-to-score", callback, tx)?;
-    eprintln!(
-        "Connection open, reading input from '{}' (press Ctrl-C to exit) ...",
-        in_port_name
-    );
+    eprintln!("Connection open, reading input from '{in_port_name}' (press Ctrl-C to exit) ...");
     // `_connection` needs to be returned, because it needs to be kept alive for `rx` to work
     Ok(MInput { _connection, rx })
 }

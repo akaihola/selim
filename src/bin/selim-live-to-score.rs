@@ -26,7 +26,7 @@ fn main() {
         }
     };
     if let Err(err) = run(device) {
-        eprintln!("Error: {}", err)
+        eprintln!("Error: {err}")
     }
 }
 
@@ -37,7 +37,7 @@ fn callback<T>(microsecond: u64, message: &[u8], _: &mut T) {
         message: NoteOn { key, vel: _ },
     } = event
     {
-        println!("{};{}", microsecond, key);
+        println!("{microsecond};{key}");
     }
 }
 

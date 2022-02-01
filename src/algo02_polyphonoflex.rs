@@ -260,11 +260,10 @@ impl<'a> PolyphonoFlex<'a> {
         {
             let live_index = LiveIdx::from(i);
             eprintln!(
-                "find_new_matches {:.3} {}(@live:{}) v{}",
+                "find_new_matches {:.3} {}(@live:{}) v{live_velocity}",
                 live_time.as_secs_f32(),
                 pitch_to_name(*pitch),
                 usize::from(live_index),
-                live_velocity
             );
             if let Some(new_match) = self
                 .find_new_match(*pitch, live_index, *live_time, *live_velocity)
@@ -304,22 +303,19 @@ impl<'a> PolyphonoFlex<'a> {
             let time_diff = absolute_time_difference(score_note.time, live_time_mapped);
             prev_debug_output = debug_output.clone();
             debug_output = Some(format!(
-                "|{:?}(@score:{}) - {:?}(@live:{:?})| = {:?}",
+                "|{:?}(@score:{}) - {live_time_mapped:?}(@live:{live_note_offset:?})| = {time_diff:?}",
                 score_note.time,
                 usize::from(score_note_offset),
-                live_time_mapped,
-                live_note_offset,
-                time_diff
             ));
             if time_diff < min_time_diff {
                 best_match_pitch_score_index = Some(live_note_offset);
                 min_time_diff = time_diff;
                 if let Some(s) = prev_debug_output {
-                    eprintln!("  {}", s)
+                    eprintln!("  {s}")
                 }
             } else {
                 if let Some(s) = prev_debug_output {
-                    eprintln!("* {}", s)
+                    eprintln!("* {s}")
                 }
                 eprintln!("  {}", debug_output.unwrap());
                 break;
