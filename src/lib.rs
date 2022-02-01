@@ -1,5 +1,3 @@
-#![feature(slice_index_methods)]
-
 use crate::score::ScoreNote;
 use algo01_homophonopedantic::MatchPerScore;
 // use algo01_homophonopedantic::MatchPerScore;

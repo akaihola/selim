@@ -7,7 +7,7 @@ use crate::{
 };
 use index_vec::{define_index_type, index_vec, IndexVec};
 use midly::num::u7;
-use std::{iter::repeat, ops::RangeBounds, slice::SliceIndex, time::Duration};
+use std::{iter::repeat, ops::RangeBounds, time::Duration};
 
 define_index_type! {
     pub struct PitchIdx = u8;
@@ -176,15 +176,28 @@ impl<'a> ScoreFollower<MatchPerPitch> for PolyphonoFlex<'a> {
     where
         R: RangeBounds<usize>,
     {
-        let slice = (range.start_bound().cloned(), range.end_bound().cloned())
-            .index(self.matches.as_raw_slice());
-        slice
-            .iter()
-            .map(|m| {
-                m.to_match_per_score(&self.score_offsets_by_pitch, &self.live)
-                    .to_owned()
-            })
-            .collect::<Vec<_>>()
+        // // Once `#![feature(slice_index_methods)]` is in Rust stable, we can do something like this instead:
+        // use std::ops::slice::SliceIndex;
+        // let slice = (range.start_bound().cloned(), range.end_bound().cloned())
+        //     .index(self.matches.as_raw_slice());
+        // slice
+        //     .iter()
+        //     .map(|m| {
+        //         m.to_match_per_score(&self.score_offsets_by_pitch, &self.live)
+        //             .to_owned()
+        //     })
+        //     .collect::<Vec<_>>()
+        // slice.to_vec()
+        let slice = self.matches.iter().enumerate().filter_map(|(idx, &item)| {
+            if range.contains(&idx) {
+                Some(
+                    item.to_match_per_score(&self.score_offsets_by_pitch, &self.live), // .to_owned(), // is this needed?
+                )
+            } else {
+                None
+            }
+        });
+        slice.collect::<Vec<MatchPerScore>>()
     }
 
     fn match_score_note(&self, m: MatchPerPitch) -> Result<ScoreNote, &'static str> {

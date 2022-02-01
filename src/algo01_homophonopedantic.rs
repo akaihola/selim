@@ -4,7 +4,7 @@ use crate::{
 };
 use index_vec::index_vec;
 use midly::num::u7;
-use std::{ops::RangeBounds, slice::SliceIndex, time::Duration};
+use std::{ops::RangeBounds, time::Duration};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct MatchPerScore {
@@ -166,9 +166,19 @@ impl ScoreFollower<MatchPerScore> for HomophonoPedantic {
     where
         R: RangeBounds<usize>,
     {
-        let slice = (range.start_bound().cloned(), range.end_bound().cloned())
-            .index(self.matches.as_raw_slice());
-        slice.to_vec()
+        // // Once `#![feature(slice_index_methods)]` is in Rust stable, we can do something like this instead:
+        // use std::ops::slice::SliceIndex;
+        // let slice = (range.start_bound().cloned(), range.end_bound().cloned())
+        //     .index(self.matches.as_raw_slice());
+        // slice.to_vec()
+        let slice = self.matches.iter().enumerate().filter_map(|(idx, &item)| {
+            if range.contains(&idx) {
+                Some(item)
+            } else {
+                None
+            }
+        });
+        slice.collect::<Vec<MatchPerScore>>()
     }
 
     fn match_score_note(&self, m: MatchPerScore) -> Result<ScoreNote, &'static str> {
