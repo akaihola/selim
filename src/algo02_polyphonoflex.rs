@@ -412,7 +412,7 @@ mod tests {
     use super::*;
     use crate::{
         score::{convert_midi_note_ons, smf_to_events},
-        test_helpers::ignore_vel,
+        test_helpers::simplify_score,
         ScoreVec,
     };
     extern crate abc_parser;
@@ -437,8 +437,8 @@ mod tests {
         let music = "X: 1\nT: test_abc_into_score\nK: C\nCDE\n";
         let score = abc_into_score(music);
         assert_eq!(
-            &ignore_vel(score),
-            &notes![(0, 60), (41666, 62), (83333, 64)]
+            &simplify_score(score),
+            &notes![(1, 60), (251, 62), (501, 64)]
         );
     }
 

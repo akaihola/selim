@@ -1,10 +1,15 @@
+use std::time::Duration;
+
 #[cfg(test)]
 use crate::{
     score::{ScoreNote, ZERO_U7},
     ScoreVec,
 };
 
-pub fn ignore_vel(score: ScoreVec) -> ScoreVec {
+/// Makes a copy of the score events changing all non-zero velocities to 100
+/// and rounding timestamps down to the closest millisecond. This is useful
+/// for simplifying tests.
+pub fn simplify_score(score: ScoreVec) -> ScoreVec {
     score
         .iter()
         .map(
@@ -13,7 +18,7 @@ pub fn ignore_vel(score: ScoreVec) -> ScoreVec {
                  pitch,
                  velocity,
              }| ScoreNote {
-                time: time.clone(),
+                time: Duration::from_millis(time.as_millis() as u64),
                 pitch: *pitch,
                 velocity: if *velocity == ZERO_U7 {
                     ZERO_U7

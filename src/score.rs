@@ -208,7 +208,7 @@ pub fn pitch_to_name(pitch: u7) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::ignore_vel;
+    use crate::test_helpers::simplify_score;
     use rstest::rstest;
     use std::path::Path;
 
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn load_midi_file_clementi() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = ignore_vel(load_midi_file_note_ons(&path, vec![]));
+        let score = simplify_score(load_midi_file_note_ons(&path, vec![]));
         assert_eq!(score.len(), 666);
         assert_eq!(
             score[..5.into()],
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn load_midi_file_clementi_track_1_channel_1() {
         let path = AsRef::<Path>::as_ref("test-asset").join("Clementi.mid");
-        let score = ignore_vel(load_midi_file_note_ons(&path, vec![chnls!(1, vec![0])]));
+        let score = simplify_score(load_midi_file_note_ons(&path, vec![chnls!(1, vec![0])]));
         assert_eq!(score.len(), 454);
         assert_eq!(
             score[..5.into()],
