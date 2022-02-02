@@ -116,14 +116,11 @@ pub grammar abc_header() for str {
 /// ```
 pub fn abc_into_score(music: &str) -> Result<ScoreVec> {
     let headers = abc_header::headers(music)?;
-    eprintln!("-----\nHEADERS: {headers:?}");
     let mut abc_with_required_headers = String::new();
     for (name, value) in headers.iter() {
         writeln!(abc_with_required_headers, "{name}: {value}")?;
-        eprintln!("ADD HEADER {name}: {value} -- MUSIC: '{abc_with_required_headers}'");
     }
     abc_with_required_headers.push_str(music);
-    eprintln!("ADD MUSIC '{music}' -- MUSIC: '{abc_with_required_headers}'");
     let tune: Tune = abc::tune(&abc_with_required_headers).unwrap();
     let smf = Smf::try_from_tune(&tune).unwrap();
     let events = smf_to_events(&smf.0, vec![]);
