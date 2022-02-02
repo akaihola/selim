@@ -13,6 +13,7 @@ pub mod score;
 pub mod algo01_homophonopedantic;
 pub mod algo02_polyphonoflex;
 pub mod playback;
+pub mod abc;
 
 define_index_type! { pub struct ScoreNoteIdx = usize; }
 pub type ScoreVec = IndexVec<ScoreNoteIdx, ScoreNote>;
@@ -71,7 +72,3 @@ fn get_stretch_factor(elapsed_score: Duration, elapsed_live: Duration) -> f32 {
 pub fn stretch(duration: Duration, stretch_factor: f32) -> Duration {
     duration * (1000.0 * stretch_factor) as u32 / 1000
 }
-
-#[cfg(test)]
-
-mod test_helpers;

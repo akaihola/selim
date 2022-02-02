@@ -410,36 +410,18 @@ fn absolute_time_difference(t1: Duration, t2: Duration) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        score::{convert_midi_note_ons, smf_to_events},
-        test_helpers::simplify_score,
-        ScoreVec,
-    };
+    use crate::{abc::abc_into_score, ScoreVec};
     extern crate abc_parser;
-    use abc_parser::{abc, datatypes::Tune as AbcTune};
-    use abc_to_midi::midly_wrappers::Smf;
     use midly::{self, num::u7};
 
     fn test_score() -> ScoreVec {
         notes![(1000, 60), (1100, 62), (1200, 64)]
     }
 
-    /// Converts an ABC formatted music notation string into a Selim score
-    fn abc_into_score(music: &str) -> ScoreVec {
-        let tune: AbcTune = abc::tune(music).unwrap();
-        let smf = Smf::try_from_tune(&tune).unwrap();
-        let events = smf_to_events(&smf.0, vec![]);
-        convert_midi_note_ons(events)
-    }
-
     #[test]
-    fn test_abc_into_score() {
-        let music = "X: 1\nT: test_abc_into_score\nK: C\nCDE\n";
-        let score = abc_into_score(music);
-        assert_eq!(
-            &simplify_score(score),
-            &notes![(1, 60), (251, 62), (501, 64)]
-        );
+    fn test_monophonic_music() {
+        let score = abc_into_score("CDE\n").unwrap();
+        assert_eq!(score, notes![(1, 60), (251, 62), (501, 64)]);
     }
 
     fn make_follower<'a>(

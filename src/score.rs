@@ -208,7 +208,7 @@ pub fn pitch_to_name(pitch: u7) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::simplify_score;
+    use crate::abc::simplify_score;
     use rstest::rstest;
     use std::path::Path;
 
