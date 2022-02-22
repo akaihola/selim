@@ -4,6 +4,7 @@ use algo01_homophonopedantic::MatchPerScore;
 use index_vec::{define_index_type, IndexVec};
 use midly::num::u7;
 use std::{ops::RangeBounds, time::Duration};
+use anyhow::Result;
 
 pub mod cleanup;
 pub mod cmdline;
@@ -15,6 +16,8 @@ pub mod algo02_polyphonoflex;
 pub mod playback;
 pub mod abc;
 
+// A vector of score note-ons. For matching MIDI input, we're only interested
+// in elapsed time and note-on pitch.
 define_index_type! { pub struct ScoreNoteIdx = usize; }
 pub type ScoreVec = IndexVec<ScoreNoteIdx, ScoreNote>;
 
@@ -28,19 +31,19 @@ define_index_type! { pub struct LiveOffsetIdx = usize; }
 type LiveOffsetVec = IndexVec<LiveOffsetIdx, LiveIdx>;
 
 pub trait Match {
-    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote, &'static str>;
-    fn live_time(&self, live: &LiveVec) -> Result<Duration, &'static str>;
+    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote>;
+    fn live_time(&self, live: &LiveVec) -> Result<Duration>;
     fn live_velocity(&self) -> u7;
     fn stretch_factor(&self) -> f32;
 }
 
 pub trait ScoreFollower<M> where M: Match {
-    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<(), &'static str>;
+    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<()>;
     fn push_live(&mut self, note: ScoreNote);
     fn matches_slice<R>(&self, range: R) -> Vec<MatchPerScore>
     where
         R: RangeBounds<usize>;
-    fn match_score_note(&self, m: M) -> Result<ScoreNote, &'static str>;
+    fn match_score_note(&self, m: M) -> Result<ScoreNote>;
 }
 
 /// Finds the next note with given `pitch`, starting from `score[index]`

@@ -2,6 +2,7 @@ use crate::{
     find_next_match_starting_at, get_stretch_factor, score::ScoreNote, LiveIdx, LiveOffsetVec,
     LiveVec, Match, MatchVec, ScoreFollower, ScoreNoteIdx, ScoreVec,
 };
+use anyhow::{bail, Result};
 use index_vec::index_vec;
 use midly::num::u7;
 use std::{ops::RangeBounds, time::Duration};
@@ -36,15 +37,15 @@ impl MatchPerScore {
         self.score_index
     }
 
-    pub fn score_note(&self, score: &ScoreVec) -> Result<ScoreNote, &'static str> {
+    pub fn score_note(&self, score: &ScoreVec) -> Result<ScoreNote> {
         if let Some(score_note) = score.get(self.score_index()) {
             Ok(*score_note)
         } else {
-            Err("Match points beyond list of score events")
+            bail!("Match points beyond list of score events")
         }
     }
 
-    pub fn score_time(&self, score: &ScoreVec) -> Result<Duration, &'static str> {
+    pub fn score_time(&self, score: &ScoreVec) -> Result<Duration> {
         Ok(self.score_note(score)?.time)
     }
 
@@ -52,7 +53,7 @@ impl MatchPerScore {
         self.live_index
     }
 
-    pub fn live_pitch(&self, live: &LiveVec) -> Result<u7, &'static str> {
+    pub fn live_pitch(&self, live: &LiveVec) -> Result<u7> {
         Ok(self.live_note(live)?.pitch)
     }
 
@@ -62,15 +63,15 @@ impl MatchPerScore {
 }
 
 impl Match for MatchPerScore {
-    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote, &'static str> {
+    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote> {
         if let Some(live_note) = live.get(self.live_index) {
             Ok(*live_note)
         } else {
-            Err("Match points beyond list of live events")
+            bail!("Match points beyond list of live events")
         }
     }
 
-    fn live_time(&self, live: &LiveVec) -> Result<Duration, &'static str> {
+    fn live_time(&self, live: &LiveVec) -> Result<Duration> {
         Ok(self.live_note(live)?.time)
     }
 
@@ -151,7 +152,7 @@ impl ScoreFollower<MatchPerScore> for HomophonoPedantic {
     /// * the time stretch factor at the last new matching input note
     /// * for all matched notes, the index in the score and in the live performance
     /// * ignored new input notes as a list of live performance indices
-    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<(), &'static str> {
+    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<()> {
         let (new_matches, ignored) = self.find_new_matches(new_live_index);
         self.matches.extend(new_matches);
         self.ignored.extend(ignored);
@@ -181,7 +182,7 @@ impl ScoreFollower<MatchPerScore> for HomophonoPedantic {
         slice.collect::<Vec<MatchPerScore>>()
     }
 
-    fn match_score_note(&self, m: MatchPerScore) -> Result<ScoreNote, &'static str> {
+    fn match_score_note(&self, m: MatchPerScore) -> Result<ScoreNote> {
         m.score_note(&self.score)
     }
 }

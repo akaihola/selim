@@ -6,6 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+abc-parser = "0.3.0"
+# abc-to-midi = { git = "https://github.com/akaihola/abc-to-midi" }
+abc-to-midi = { path = "lib/abc-to-midi" }
+anyhow = "1.0.53"
 assert_approx_eq = "1.1.0"
 crossbeam-channel = "0.5.1"
 ctrlc = "3.2.1"
@@ -15,6 +19,7 @@ midir = "0.7.0"
 midly = "0.5"
 nodi = "0.13.2"
 once_cell = "1.9.0"
+peg = "0.7.0"
 structopt = "0.3.25"
 
 [dev-dependencies]

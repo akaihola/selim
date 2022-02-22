@@ -1,6 +1,6 @@
 use self::InfoFieldOrder::{First, Last, Middle, Second};
 use crate::{
-    score::{convert_midi_note_ons, smf_to_events, ScoreNote, ZERO_U7},
+    score::{convert_midi_note_ons, smf_to_events, ScoreNote, ZERO_U7, ScoreEvent},
     ScoreVec,
 };
 use abc_parser::{abc, datatypes::Tune};
@@ -114,7 +114,7 @@ pub grammar abc_header() for str {
 /// T: test_tune
 /// K: C
 /// ```
-pub fn abc_into_score(music: &str) -> Result<ScoreVec> {
+pub fn abc_into_events(music: &str) -> Result<Vec<ScoreEvent>> {
     let headers = abc_header::headers(music)?;
     let mut abc_with_required_headers = String::new();
     for (name, value) in headers.iter() {
@@ -123,8 +123,11 @@ pub fn abc_into_score(music: &str) -> Result<ScoreVec> {
     abc_with_required_headers.push_str(music);
     let tune: Tune = abc::tune(&abc_with_required_headers).unwrap();
     let smf = Smf::try_from_tune(&tune).unwrap();
-    let events = smf_to_events(&smf.0, vec![]);
-    Ok(simplify_score(convert_midi_note_ons(events)))
+    Ok(smf_to_events(&smf.0, vec![]))
+}
+
+pub fn abc_into_score(music: &str) -> Result<ScoreVec> {
+    Ok(simplify_score(convert_midi_note_ons(abc_into_events(music)?)))
 }
 
 #[cfg(test)]

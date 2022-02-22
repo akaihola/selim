@@ -5,6 +5,7 @@ use crate::{
     stretch, LiveIdx, LiveOffsetVec, LiveVec, Match, MatchIdx, MatchVec, ScoreFollower,
     ScoreNoteIdx, ScoreVec,
 };
+use anyhow::{bail, Result};
 use index_vec::{define_index_type, index_vec, IndexVec};
 use midly::num::u7;
 use std::{iter::repeat, ops::RangeBounds, time::Duration};
@@ -83,15 +84,15 @@ impl MatchPerPitch {
 }
 
 impl Match for MatchPerPitch {
-    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote, &'static str> {
+    fn live_note(&self, live: &LiveVec) -> Result<ScoreNote> {
         if let Some(live_note) = live.get(self.live_index) {
             Ok(*live_note)
         } else {
-            Err("Match points beyond list of live events")
+            bail!("Match points beyond list of live events")
         }
     }
 
-    fn live_time(&self, live: &LiveVec) -> Result<Duration, &'static str> {
+    fn live_time(&self, live: &LiveVec) -> Result<Duration> {
         Ok(self.live_note(live)?.time)
     }
 
@@ -157,7 +158,7 @@ impl<'a> ScoreFollower<MatchPerPitch> for PolyphonoFlex<'a> {
     /// * the time stretch factor at the last new matching input note
     /// * for all matched notes, the index in the score and in the live performance
     /// * ignored new input notes as a list of live performance indices
-    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<(), &'static str> {
+    fn follow_score(&mut self, new_live_index: LiveIdx) -> Result<()> {
         let (matches, ignored, match_offsets_by_pitch) = self.find_new_matches(new_live_index)?;
         let matches_offset = MatchIdx::from(self.matches.len());
         self.matches.extend(matches);
@@ -200,7 +201,7 @@ impl<'a> ScoreFollower<MatchPerPitch> for PolyphonoFlex<'a> {
         slice.collect::<Vec<MatchPerScore>>()
     }
 
-    fn match_score_note(&self, m: MatchPerPitch) -> Result<ScoreNote, &'static str> {
+    fn match_score_note(&self, m: MatchPerPitch) -> Result<ScoreNote> {
         m.to_match_per_score(&self.score_offsets_by_pitch, &self.live)
             .score_note(self.score)
     }
@@ -237,14 +238,11 @@ impl<'a> PolyphonoFlex<'a> {
     fn find_new_matches(
         &self,
         new_live_index: LiveIdx,
-    ) -> Result<
-        (
-            MatchVec<MatchPerPitch>,
-            LiveOffsetVec,
-            PitchesAndMatchOffsets,
-        ),
-        &'static str,
-    > {
+    ) -> Result<(
+        MatchVec<MatchPerPitch>,
+        LiveOffsetVec,
+        PitchesAndMatchOffsets,
+    )> {
         let live = &self.live;
         let mut matches: MatchVec<MatchPerPitch> = index_vec![];
         let mut ignored = index_vec![];
@@ -260,18 +258,27 @@ impl<'a> PolyphonoFlex<'a> {
         {
             let live_index = LiveIdx::from(i);
             eprintln!(
-                "find_new_matches {:.3} {}(@live:{}) v{live_velocity}",
-                live_time.as_secs_f32(),
-                pitch_to_name(*pitch),
+                "find_new_matches for live #{} {} {:.3}s v{live_velocity}",
                 usize::from(live_index),
+                pitch_to_name(*pitch),
+                live_time.as_secs_f32(),
             );
             if let Some(new_match) = self
                 .find_new_match(*pitch, live_index, *live_time, *live_velocity)
                 .unwrap()
             {
-                let pitch = PitchIdx::from(self.get_match_pitch(new_match)?.as_int());
-                match_offsets_by_pitch.push((pitch, matches.len().into()));
+                let pitch_idx = PitchIdx::from(self.get_match_pitch(new_match)?.as_int());
+                match_offsets_by_pitch.push((pitch_idx, matches.len().into()));
                 matches.push(new_match);
+                let _match_per_score = new_match.to_match_per_score(&self.score_offsets_by_pitch, live);
+                eprintln!(
+                    "              found score #{:?} {}[{:?}] {:.3}s v{}",
+                    _match_per_score.score_index(),
+                    pitch_to_name(*pitch),
+                    new_match.score_per_pitch_index(),
+                    _match_per_score.score_time(&self.score)?.as_secs_f32(),
+                    _match_per_score.score_velocity(),
+                )
             } else {
                 ignored.push(live_index);
             }
@@ -285,7 +292,7 @@ impl<'a> PolyphonoFlex<'a> {
         live_index: LiveIdx,
         live_time: Duration,
         live_velocity: u7,
-    ) -> Result<Option<MatchPerPitch>, &str> {
+    ) -> Result<Option<MatchPerPitch>> {
         let next_unmatched_offset_for_pitch = self.get_next_unmatched_offset_for_pitch(pitch);
         let pitch = pitch.as_int() as usize;
         let score_for_pitch = &self.score_offsets_by_pitch[pitch];
@@ -338,7 +345,7 @@ impl<'a> PolyphonoFlex<'a> {
         }
     }
 
-    fn live_time_mapped(&self, live_time: Duration) -> Result<Duration, &str> {
+    fn live_time_mapped(&self, live_time: Duration) -> Result<Duration> {
         Ok(if let Some(last_match) = self.last_per_pitch_match() {
             stretch(
                 live_time - last_match.live_time(&self.live)?,
@@ -360,7 +367,7 @@ impl<'a> PolyphonoFlex<'a> {
         }
     }
 
-    fn get_match_pitch(&self, new_match: MatchPerPitch) -> Result<u7, &'static str> {
+    fn get_match_pitch(&self, new_match: MatchPerPitch) -> Result<u7> {
         Ok(new_match.live_note(&self.live)?.pitch)
     }
 
@@ -368,7 +375,7 @@ impl<'a> PolyphonoFlex<'a> {
         &self,
         new_match_in_score: ScoreNote,
         new_match_in_live_time: Duration,
-    ) -> Result<f32, &'static str> {
+    ) -> Result<f32> {
         match self.last_per_pitch_match() {
             Some::<&MatchPerPitch>(last_match) => {
                 let prev_match_in_live = last_match.live_note(&self.live)?;
@@ -410,9 +417,13 @@ fn absolute_time_difference(t1: Duration, t2: Duration) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{abc::abc_into_score, ScoreVec};
+    use crate::{
+        abc::{abc_into_events, abc_into_score},
+        playback::play_next,
+        ScoreVec,
+    };
     extern crate abc_parser;
-    use midly::{self, num::u7};
+    use midly::{self, live::LiveEvent, num::u7};
 
     fn test_score() -> ScoreVec {
         notes![(1000, 60), (1100, 62), (1200, 64)]
@@ -420,8 +431,37 @@ mod tests {
 
     #[test]
     fn test_monophonic_music() {
-        let score = abc_into_score("CDE\n").unwrap();
-        assert_eq!(score, notes![(1, 60), (251, 62), (501, 64)]);
+        let expect_score = abc_into_score("CDE\n").unwrap();
+        let playback_score = abc_into_events("EFG\n").unwrap();
+        let mut follower = PolyphonoFlex::new(&expect_score);
+        let mut playback_head = 0;
+        let mut t = expect_score[0].time; // start live at same millisecond as expected score
+        let delay = Duration::ZERO;
+        let mut midi_data = vec![];
+        for &note in expect_score.iter() {
+            let new_live_index = follower.live.len().into();
+            follower.push_live(note);
+            follower.follow_score(new_live_index).unwrap();
+            let (mut midi_buf, new_playback_head, score_wait) = play_next(
+                &expect_score,
+                &follower.live,
+                &playback_score,
+                playback_head,
+                &follower.matches_slice(..),
+                t,
+                delay,
+            )
+            .unwrap();
+            eprintln!("Playback head {playback_head} -> {new_playback_head}. Wait {score_wait:?}. Play {midi_buf:?}.");
+            playback_head = new_playback_head;
+            t += score_wait;
+            midi_data.append(&mut midi_buf);
+        }
+        let played_events: Vec<LiveEvent> = midi_data
+            .iter()
+            .map(|raw| LiveEvent::parse(raw).unwrap())
+            .collect();
+        assert_eq!(played_events, vec![]);
     }
 
     fn make_follower<'a>(

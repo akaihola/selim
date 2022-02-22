@@ -10,7 +10,7 @@ use std::{path::Path, str::FromStr, time::Duration};
 
 use crate::ScoreVec;
 
-/// A note with a given pitch at a given timestamp in a score or in a live performance
+/// A note-on with a given pitch at a given timestamp in a score or in a live performance
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreNote {
     pub time: Duration,

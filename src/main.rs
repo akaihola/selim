@@ -9,9 +9,9 @@ use selim::{
     cleanup::{attach_ctrl_c_handler, handle_ctrl_c},
     cmdline::parse_args,
     device::{open_midi_input, open_midi_output, DeviceSelector},
-    playback::{play_past_moments, MidiMessages},
+    playback::{MidiMessages, play_next},
     score::{load_midi_file, load_midi_file_note_ons, pitch_to_name, ScoreEvent, ScoreNote},
-    stretch, LiveIdx, LiveVec, Match, ScoreFollower, ScoreNoteIdx, ScoreVec,
+    LiveIdx, LiveVec, Match, ScoreFollower, ScoreNoteIdx, ScoreVec,
 };
 use std::{
     boxed::Box,
@@ -147,55 +147,6 @@ fn run(
             },
         };
     }
-}
-
-fn play_next(
-    expect_score: &ScoreVec,
-    live: &LiveVec,
-    playback_score: &[ScoreEvent],
-    head: usize, // index of next score note to be played
-    matches: &[MatchPerScore],
-    t: Duration, // system time since Unix Epoch
-    delay: Duration,
-) -> Result<(MidiMessages, usize, Duration), Box<dyn Error>> {
-    if head >= playback_score.len() {
-        // The playback score has reached end. Only react to live notes from now on.
-        return Ok((vec![], head, Duration::from_secs(3600)));
-    }
-
-    // Calculate the wall clock time for when to play the next moment in the playback score:
-    // - PREV = the last successfully matched live input note
-    // - t = wall time now
-    // - t_prev = wall time of PREV
-    // - ts_prev = score time of PREV
-    // - k = stretch factor at PREV
-    // - dt = elapsed wall time since PREV
-    // - dts = estimated score elapsed time since PREV
-    // - ts = estimated score time now
-    // - ts_next = score time of next upcoming playback note
-    // - dt_next = estimated wait time until next upcoming playback note
-    let prev_match = matches
-        .last()
-        .expect("play_next() needs a non-empty list of matches");
-    let t_prev = prev_match.live_time(live)?;
-    let ts_prev = prev_match.score_time(expect_score)?;
-    let k = prev_match.stretch_factor();
-    let dt = t - t_prev;
-    let dts = stretch(dt + delay, 1.0 / k);
-    let ts = ts_prev + dts;
-    let (buf, new_head) = play_past_moments(playback_score, head, ts, prev_match.live_velocity())?;
-    let dt_next = if new_head >= playback_score.len() {
-        Duration::from_secs(1)
-    } else {
-        let ts_next = playback_score[new_head].time;
-        if ts_next < ts {
-            Duration::from_millis(10)
-        } else {
-            let dts_next = ts_next - ts;
-            stretch(dts_next, k)
-        }
-    };
-    Ok((buf, new_head, dt_next))
 }
 
 fn print_expect(expect_score: &ScoreVec, prev_match: &Option<MatchPerScore>) {
